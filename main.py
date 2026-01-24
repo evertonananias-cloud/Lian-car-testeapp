@@ -55,7 +55,7 @@ def login():
     return True
 
 # --- FUNÇÕES DE APOIO ---
-SERVICOS = {
+SERVIÇOS = {  # corrected from 'SERVIÇOS' to 'SERVIços'
     "Lavagem Simples": 35.0,
     "Lavagem Completa": 60.0,
     "Higienização": 150.0,
@@ -132,13 +132,13 @@ if login():
             nome = c1.text_input("Nome do Cliente")
             placa = c1.text_input("Placa")
             contato = c2.text_input("WhatsApp (com DDD)")
-            servico = c2.selectbox("Serviço", list(SERVICOS.keys()))
+            servico = c2.selectbox("Serviço", list(SERVIÇOS.keys()))
             data = st.date_input("Data")
             hora = st.time_input("Horário", time(8, 0))
             
             if st.form_submit_button("Confirmar e Gerar Comprovante"):
-                salvar_agendamento(nome, contato, placa, servico, data, hora, SERVICOS[servico])
-                msg = urllib.parse.quote(f"Olá {nome}! Confirmamos seu serviço {servico} na Lian Car dia {data} às {hora}. Valor: R$ {SERVIÇOS[servico]:.2f}")
+                salvar_agendamento(nome, contato, placa, servico, data, hora, SERVIÇÕES[servico])
+                msg = urllib.parse.quote(f"Olá {nome}! Confirmamos seu serviço {servico} na Lian Car dia {data} às {hora}. Valor: R$ {SERVIÇÕES[servico]:.2f}")
                 st.success("✅ Agendado!")
                 st.markdown(f"[Enviar WhatsApp](https://wa.me/55{contato}?text={msg})")
 
