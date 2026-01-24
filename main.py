@@ -2,111 +2,70 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# --- CONFIGURAÇÃO VISUAL DA LIAN CAR ---
-st.set_page_config(page_title="Lian Car | Gestão 2.0", page_icon="🧼", layout="wide")
+# Estética Premium
+st.set_page_config(page_title="Lian Car App", page_icon="🧼", layout="wide")
 
+# CSS para Vibe Profissional
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: white; }
-    .stMetric { background-color: #1f2937; padding: 20px; border-radius: 12px; border-bottom: 4px solid #00d4ff; }
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] { 
-        background-color: #1f2937; border-radius: 5px; padding: 10px 20px; color: white;
-    }
+    [data-testid="stMetricValue"] { color: #00d4ff; font-size: 32px; }
+    .stTabs [data-baseweb="tab-list"] { gap: 20px; }
+    .stTabs [data-baseweb="tab"] { height: 50px; border-radius: 10px 10px 0 0; }
     </style>
     """, unsafe_allow_stdio=True)
 
-# --- INICIALIZAÇÃO DO BANCO DE DADOS (SESSION STATE) ---
+# Banco de Dados em Sessão (Reset ao fechar a aba)
 if 'db' not in st.session_state:
     st.session_state.db = pd.DataFrame(columns=['id', 'Data', 'Cliente', 'Serviço', 'Valor', 'Status'])
-
 if 'estoque' not in st.session_state:
     st.session_state.estoque = pd.DataFrame([
-        {"Item": "Shampoo Ativado (L)", "Qtd": 85, "Fornecedor": "QuimicClean"},
-        {"Item": "Cera de Carnaúba", "Qtd": 40, "Fornecedor": "AutoBrilho"},
-        {"Item": "Pretinho Premium", "Qtd": 15, "Fornecedor": "SulQuimica"}
+        {"Item": "Shampoo 5L", "Qtd": 80}, {"Item": "Pretinho", "Qtd": 30}, {"Item": "Cera", "Qtd": 50}
     ])
 
-# --- BARRA LATERAL ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2966/2966480.png", width=100)
-st.sidebar.title("Lian Car Control")
-menu = st.sidebar.selectbox("Ir para:", ["📊 Dashboard", "🚗 Agendamentos & Fluxo", "📦 Estoque & Fornecedores"])
+# Menu Lateral
+st.sidebar.title("🧼 Lian Car v2.0")
+menu = st.sidebar.radio("Navegação", ["Dashboard", "Agendamentos", "Fornecedores"])
 
-# --- MÓDULO: DASHBOARD ---
-if menu == "📊 Dashboard":
-    st.title("📈 Performance Lian Car")
+# --- DASHBOARD ---
+if menu == "Dashboard":
+    st.title("📈 Dashboard de Performance")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Faturamento", f"R$ {st.session_state.db['Valor'].sum():,.2f}")
+    c2.metric("Serviços", len(st.session_state.db))
+    c3.metric("Ticket Médio", f"R$ {st.session_state.db['Valor'].mean() if len(st.session_state.db)>0 else 0:,.2f}")
     
     if not st.session_state.db.empty:
-        c1, c2, c3 = st.columns(3)
-        receita = st.session_state.db['Valor'].sum()
-        servicos = len(st.session_state.db)
-        ticket = receita / servicos if servicos > 0 else 0
-        
-        c1.metric("Faturamento Bruto", f"R$ {receita:,.2f}")
-        c2.metric("Total de Lavagens", servicos)
-        c3.metric("Ticket Médio", f"R$ {ticket:,.2f}")
-        
-        st.divider()
-        st.subheader("Volume de Vendas por Serviço")
         st.bar_chart(st.session_state.db, x="Serviço", y="Valor", color="#00d4ff")
-    else:
-        st.info("Aguardando os primeiros dados para gerar o dashboard. Comece pelos agendamentos!")
 
-# --- MÓDULO: AGENDAMENTOS (CRUD) ---
-elif menu == "🚗 Agendamentos & Fluxo":
-    st.title("📅 Gestão do Pátio")
+# --- AGENDAMENTOS (CRUD) ---
+elif menu == "Agendamentos":
+    st.title("📅 Gestão de Serviços")
     
-    with st.expander("➕ Novo Agendamento / Edição Rápida", expanded=False):
-        c1, c2, c3 = st.columns([2, 2, 1])
-        cli = c1.text_input("Nome do Cliente")
-        ser = c2.selectbox("Tipo de Serviço", ["Lavagem Simples", "Completa", "Polimento", "Higienização Interna"])
-        val = c3.number_input("Valor (R$)", min_value=0.0, step=10.0, value=50.0)
+    with st.expander("➕ Novo / Editar Registro"):
+        c1, c2, c3 = st.columns(3)
+        cli = c1.text_input("Cliente")
+        ser = c2.selectbox("Serviço", ["Lavagem Simples", "Completa", "Polimento"])
+        val = c3.number_input("Valor", min_value=0.0, value=50.0)
         
-        if st.button("Confirmar Entrada 🚀"):
+        if st.button("Salvar na Base"):
             new_id = int(datetime.now().timestamp())
-            nova_entrada = pd.DataFrame([[new_id, datetime.now().strftime("%d/%m %H:%M"), cli, ser, val, "Na Fila"]], 
-                                       columns=['id', 'Data', 'Cliente', 'Serviço', 'Valor', 'Status'])
-            st.session_state.db = pd.concat([st.session_state.db, nova_entrada], ignore_index=True)
-            st.success(f"Veículo de {cli} registrado!")
+            novo = pd.DataFrame([[new_id, datetime.now().strftime("%d/%m"), cli, ser, val, "Pendente"]], 
+                                columns=['id', 'Data', 'Cliente', 'Serviço', 'Valor', 'Status'])
+            st.session_state.db = pd.concat([st.session_state.db, novo], ignore_index=True)
+            st.success("Lançado!")
             st.rerun()
 
-    st.divider()
-    
-    st.subheader("📋 Tabela de Controle (Edite ou Exclua aqui)")
-    # O data_editor permite editar valores e excluir linhas (selecionando e apertando Del)
-    edited_df = st.data_editor(
-        st.session_state.db, 
-        num_rows="dynamic", # Permite excluir linhas
-        use_container_width=True,
-        column_config={
-            "id": None, # Oculta o ID
-            "Status": st.column_config.SelectboxColumn("Status", options=["Na Fila", "Lavando", "Finalizado", "Entregue"]),
-            "Valor": st.column_config.NumberColumn("Valor R$", format="R$ %.2f")
-        }
-    )
-    
-    if st.button("💾 Salvar Alterações"):
+    st.subheader("📋 Lista de Atendimentos")
+    # O data_editor permite editar e excluir (clicando na linha e apertando Delete)
+    edited_df = st.data_editor(st.session_state.db, num_rows="dynamic", use_container_width=True, key="editor_db")
+    if st.button("Atualizar Banco de Dados"):
         st.session_state.db = edited_df
-        st.toast("Banco de dados atualizado!")
+        st.toast("Dados sincronizados!")
 
-# --- MÓDULO: FORNECEDORES & ESTOQUE ---
-elif menu == "📦 Estoque & Fornecedores":
-    st.title("📦 Insumos e Parceiros")
-    
-    col_e, col_f = st.columns([2, 1])
-    
-    with col_e:
-        st.subheader("Níveis de Estoque")
-        for i, row in st.session_state.estoque.iterrows():
-            st.write(f"**{row['Item']}** ({row['Fornecedor']})")
-            cor = "red" if row['Qtd'] < 30 else "green"
-            st.progress(row['Qtd'] / 100)
-            
-    with col_f:
-        st.subheader("Ações")
-        if st.button("Simular Pedido de Compra"):
-            st.warning("Gerando lista de necessidades...")
-            st.info("Shampoo - Pedir 10L\nPretinho - Pedir 5L")
-
-st.sidebar.divider()
-st.sidebar.caption("Lian Car v2.1 | Powered by Vibe Coding")
+# --- FORNECEDORES ---
+elif menu == "Fornecedores":
+    st.title("📦 Estoque & Compras")
+    st.write("Acompanhe seus insumos em tempo real.")
+    for i, row in st.session_state.estoque.iterrows():
+        st.write(f"**{row['Item']}**")
+        st.progress(row['Qtd']/100)
