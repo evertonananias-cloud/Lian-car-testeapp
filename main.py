@@ -12,7 +12,7 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] { gap: 20px; }
     .stTabs [data-baseweb="tab"] { height: 50px; border-radius: 10px 10px 0 0; }
     </style>
-    """, unsafe_allow_stdio=True)
+    """, unsafe_allow_html=True)
 
 # Banco de Dados em Sessão (Reset ao fechar a aba)
 if 'db' not in st.session_state:
