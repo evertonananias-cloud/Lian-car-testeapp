@@ -2,70 +2,83 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# Estética Premium
-st.set_page_config(page_title="Lian Car App", page_icon="🧼", layout="wide")
+# --- CONFIGURAÇÃO VISUAL ---
+st.set_page_config(page_title="Lian Car | Gestão", page_icon="🧼", layout="wide")
 
-# CSS para Vibe Profissional
+# Estilização Dark Mode Premium
 st.markdown("""
     <style>
-    [data-testid="stMetricValue"] { color: #00d4ff; font-size: 32px; }
-    .stTabs [data-baseweb="tab-list"] { gap: 20px; }
-    .stTabs [data-baseweb="tab"] { height: 50px; border-radius: 10px 10px 0 0; }
+    .stApp { background-color: #0e1117; color: white; }
+    .stMetric { background-color: #1f2937; padding: 15px; border-radius: 10px; border-left: 5px solid #00d4ff; }
     </style>
     """, unsafe_allow_stdio=True)
 
-# Banco de Dados em Sessão (Reset ao fechar a aba)
+# --- INICIALIZAÇÃO DO BANCO DE DADOS ---
 if 'db' not in st.session_state:
     st.session_state.db = pd.DataFrame(columns=['id', 'Data', 'Cliente', 'Serviço', 'Valor', 'Status'])
-if 'estoque' not in st.session_state:
-    st.session_state.estoque = pd.DataFrame([
-        {"Item": "Shampoo 5L", "Qtd": 80}, {"Item": "Pretinho", "Qtd": 30}, {"Item": "Cera", "Qtd": 50}
-    ])
 
-# Menu Lateral
-st.sidebar.title("🧼 Lian Car v2.0")
-menu = st.sidebar.radio("Navegação", ["Dashboard", "Agendamentos", "Fornecedores"])
+# --- MENU LATERAL ---
+st.sidebar.title("🧼 Lian Car Control")
+menu = st.sidebar.radio("Navegação", ["📊 Dashboard", "🚗 Agendamentos", "📦 Fornecedores"])
 
-# --- DASHBOARD ---
-if menu == "Dashboard":
-    st.title("📈 Dashboard de Performance")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Faturamento", f"R$ {st.session_state.db['Valor'].sum():,.2f}")
-    c2.metric("Serviços", len(st.session_state.db))
-    c3.metric("Ticket Médio", f"R$ {st.session_state.db['Valor'].mean() if len(st.session_state.db)>0 else 0:,.2f}")
-    
+# --- FUNÇÕES ---
+def adicionar_servico(cli, ser, val):
+    new_id = int(datetime.now().timestamp())
+    data_atual = datetime.now().strftime("%d/%m %H:%M")
+    nova_linha = pd.DataFrame([[new_id, data_atual, cli, ser, val, "Pendente"]], 
+                             columns=['id', 'Data', 'Cliente', 'Serviço', 'Valor', 'Status'])
+    st.session_state.db = pd.concat([st.session_state.db, nova_linha], ignore_index=True)
+
+# --- MÓDULO: DASHBOARD ---
+if menu == "📊 Dashboard":
+    st.title("📊 Painel de Performance")
     if not st.session_state.db.empty:
-        st.bar_chart(st.session_state.db, x="Serviço", y="Valor", color="#00d4ff")
-
-# --- AGENDAMENTOS (CRUD) ---
-elif menu == "Agendamentos":
-    st.title("📅 Gestão de Serviços")
-    
-    with st.expander("➕ Novo / Editar Registro"):
         c1, c2, c3 = st.columns(3)
-        cli = c1.text_input("Cliente")
-        ser = c2.selectbox("Serviço", ["Lavagem Simples", "Completa", "Polimento"])
-        val = c3.number_input("Valor", min_value=0.0, value=50.0)
-        
-        if st.button("Salvar na Base"):
-            new_id = int(datetime.now().timestamp())
-            novo = pd.DataFrame([[new_id, datetime.now().strftime("%d/%m"), cli, ser, val, "Pendente"]], 
-                                columns=['id', 'Data', 'Cliente', 'Serviço', 'Valor', 'Status'])
-            st.session_state.db = pd.concat([st.session_state.db, novo], ignore_index=True)
-            st.success("Lançado!")
+        c1.metric("Receita Total", f"R$ {st.session_state.db['Valor'].sum():,.2f}")
+        c2.metric("Serviços", len(st.session_state.db))
+        c3.metric("Ticket Médio", f"R$ {st.session_state.db['Valor'].mean():,.2f}")
+        st.bar_chart(st.session_state.db, x="Serviço", y="Valor")
+    else:
+        st.info("Nenhum dado registrado ainda.")
+
+# --- MÓDULO: AGENDAMENTOS (CRUD COMPLETO) ---
+elif menu == "🚗 Agendamentos":
+    st.title("🚗 Gestão de Serviços")
+    
+    # Formulário de Cadastro
+    with st.expander("➕ Novo Agendamento"):
+        c1, c2, c3 = st.columns(3)
+        u_cli = c1.text_input("Nome do Cliente")
+        u_ser = c2.selectbox("Serviço", ["Geral", "Lavagem Simples", "Polimento", "Higienização"])
+        u_val = c3.number_input("Valor (R$)", min_value=0.0, value=100.0)
+        if st.button("Lançar Serviço"):
+            adicionar_servico(u_cli, u_ser, u_val)
+            st.success("Registrado com sucesso!")
             st.rerun()
 
-    st.subheader("📋 Lista de Atendimentos")
-    # O data_editor permite editar e excluir (clicando na linha e apertando Delete)
-    edited_df = st.data_editor(st.session_state.db, num_rows="dynamic", use_container_width=True, key="editor_db")
-    if st.button("Atualizar Banco de Dados"):
+    st.divider()
+    
+    # Tabela Interativa (Edição e Exclusão)
+    st.subheader("📋 Pátio e Histórico")
+    st.write("Dica: Para **deletar**, selecione a linha e aperte 'Delete' no teclado.")
+    
+    edited_df = st.data_editor(
+        st.session_state.db,
+        num_rows="dynamic", # Permite excluir e adicionar linhas manualmente
+        use_container_width=True,
+        column_config={
+            "id": None, # Esconde o ID técnico
+            "Status": st.column_config.SelectboxColumn("Status", options=["Pendente", "Lavando", "Finalizado"]),
+            "Valor": st.column_config.NumberColumn("Valor R$", format="R$ %.2f")
+        },
+        key="editor_tabela"
+    )
+    
+    if st.button("💾 Salvar Alterações da Tabela"):
         st.session_state.db = edited_df
-        st.toast("Dados sincronizados!")
+        st.toast("Banco de dados atualizado!")
 
-# --- FORNECEDORES ---
-elif menu == "Fornecedores":
-    st.title("📦 Estoque & Compras")
-    st.write("Acompanhe seus insumos em tempo real.")
-    for i, row in st.session_state.estoque.iterrows():
-        st.write(f"**{row['Item']}**")
-        st.progress(row['Qtd']/100)
+# --- MÓDULO: FORNECEDORES ---
+elif menu == "📦 Fornecedores":
+    st.title("📦 Insumos & Fornecedores")
+    st.info("Módulo de estoque em desenvolvimento. Aqui você poderá cadastrar seus fornecedores de produtos químicos.")
