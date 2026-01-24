@@ -12,13 +12,13 @@ st.set_page_config(page_title="Lian Car - Gestão Profissional", layout="wide")
 def init_db():
     conn = sqlite3.connect('lian_car.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS clientes 
+    c.execute('''CREATE TABLE IF NOT EXISTS clientes \
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT, contato TEXT, placa TEXT UNIQUE)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS agendamentos 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER, servico TEXT, 
-                  data TEXT, horario TEXT, valor REAL, status TEXT, 
+    c.execute('''CREATE TABLE IF NOT EXISTS agendamentos \
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER, servico TEXT, \
+                  data TEXT, horario TEXT, valor REAL, status TEXT, \
                   FOREIGN KEY(cliente_id) REFERENCES clientes(id))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS despesas 
+    c.execute('''CREATE TABLE IF NOT EXISTS despesas \
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, descricao TEXT, categoria TEXT, valor REAL, data TEXT)''')
     conn.commit()
     conn.close()
@@ -50,8 +50,8 @@ def login():
 
 # --- FUNÇÕES DE APOIO ---
 SERVICOS = {
-    "Lavagem Simples": 50.0,
-    "Lavagem Completa": 90.0,
+    "Lavagem Simples": 35.0,
+    "Lavagem Completa": 60.0,
     "Higienização": 150.0,
     "Polimento": 250.0
 }
