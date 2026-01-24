@@ -11,7 +11,7 @@ st.markdown("""
     .stApp { background-color: #0e1117; color: white; }
     .stMetric { background-color: #1f2937; padding: 15px; border-radius: 10px; border-left: 5px solid #00d4ff; }
     </style>
-    """, unsafe_allow_stdio=True)
+    """, unsafe_allow_html=True)
 
 # --- INICIALIZAÇÃO DO BANCO DE DADOS ---
 if 'db' not in st.session_state:
