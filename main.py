@@ -4,6 +4,11 @@ import sqlite3
 import hashlib
 import urllib.parse
 from datetime import datetime, time
+import os
+
+# Remove existing database file if present (user requested behavior)
+if os.path.exists('lian_car.db'):
+    os.remove('lian_car.db')
 
 # --- CONFIGURAÇÕES E ESTILO ---
 st.set_page_config(page_title="Lian Car - Gestão Profissional", layout="wide")
@@ -165,3 +170,4 @@ if login():
 else:
     st.title("🚿 Lian Car")
     st.info("Acesse com suas credenciais para gerenciar o lava-jato.")
+
