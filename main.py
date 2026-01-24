@@ -6,9 +6,10 @@ import urllib.parse
 from datetime import datetime, time
 import os
 
-# Remove existing database file if present (user requested behavior)
-if os.path.exists('lian_car.db'):
-    os.remove('lian_car.db')
+# NOTE: Removed unconditional deletion of the database file.
+# Deleting the DB at module load caused every Streamlit rerun to recreate an empty DB,
+# which made newly created agendamentos disappear from "Controle de Pátio".
+# If you still want a manual reset, there's a button in the sidebar later.
 
 # --- CONFIGURAÇÕES E ESTILO ---
 st.set_page_config(page_title="Lian Car - Gestão Profissional", layout="wide")
@@ -64,9 +65,21 @@ SERVICOS = {
 def salvar_agendamento(nome, contato, placa, servico, data, hora, valor):
     conn = sqlite3.connect('lian_car.db')
     c = conn.cursor()
+
+    # Ensure we persist client row before selecting its id
     c.execute("INSERT OR IGNORE INTO clientes (nome, contato, placa) VALUES (?,?,?)", (nome, contato, placa))
+    conn.commit()  # commit so the row is visible to subsequent SELECT
+
     c.execute("SELECT id FROM clientes WHERE placa=?", (placa,))
-    c_id = c.fetchone()[0]
+    row = c.fetchone()
+    if row:
+        c_id = row[0]
+    else:
+        # as a fallback, insert and use lastrowid
+        c.execute("INSERT INTO clientes (nome, contato, placa) VALUES (?,?,?)", (nome, contato, placa))
+        conn.commit()
+        c_id = c.lastrowid
+
     c.execute("INSERT INTO agendamentos (cliente_id, servico, data, horario, valor, status) VALUES (?,?,?,?,?,?)",
               (c_id, servico, str(data), str(hora), valor, "Agendado"))
     conn.commit()
@@ -78,6 +91,13 @@ if login():
     if st.sidebar.button("Sair"):
         del st.session_state['logado']
         st.rerun()
+
+    # Optional: manual reset button for development (only visible after login)
+    if st.sidebar.button("Resetar Banco (apagar dados)"):
+        if os.path.exists('lian_car.db'):
+            os.remove('lian_car.db')
+        init_db()
+        st.experimental_rerun()
 
     menu = ["Dashboard", "Novo Agendamento", "Controle de Pátio", "Financeiro"]
     if st.session_state['nivel'] == "operacional":
@@ -93,8 +113,8 @@ if login():
         df_gastos = pd.read_sql_query("SELECT * FROM despesas", conn)
         
         c1, c2, c3 = st.columns(3)
-        receita = df_vendas['valor'].sum()
-        gastos = df_gastos['valor'].sum()
+        receita = df_vendas['valor'].sum() if not df_vendas.empty else 0.0
+        gastos = df_gastos['valor'].sum() if not df_gastos.empty else 0.0
         c1.metric("Faturamento Total", f"R$ {receita:.2f}")
         c2.metric("Despesas", f"R$ {gastos:.2f}")
         c3.metric("Lucro Líquido", f"R$ {receita - gastos:.2f}")
@@ -102,6 +122,7 @@ if login():
         st.subheader("Serviços Realizados")
         if not df_vendas.empty:
             st.bar_chart(df_vendas['servico'].value_counts())
+        conn.close()
 
     # --- MÓDULO: NOVO AGENDAMENTO ---
     elif choice == "Novo Agendamento":
@@ -117,7 +138,7 @@ if login():
             
             if st.form_submit_button("Confirmar e Gerar Comprovante"):
                 salvar_agendamento(nome, contato, placa, servico, data, hora, SERVICOS[servico])
-                msg = urllib.parse.quote(f"Olá {nome}! Confirmamos seu serviço {servico} na Lian Car dia {data} às {hora}. Valor: R$ {SERVICOS[servico]:.2f}")
+                msg = urllib.parse.quote(f"Olá {nome}! Confirmamos seu serviço {servico} na Lian Car dia {data} às {hora}. Valor: R$ {SERVIÇOS[servico]:.2f}")
                 st.success("✅ Agendado!")
                 st.markdown(f"[Enviar WhatsApp](https://wa.me/55{contato}?text={msg})")
 
@@ -131,7 +152,7 @@ if login():
         for status, col in zip(["Agendado", "Em Lavagem", "Pronto"], [col1, col2, col3]):
             with col:
                 st.subheader(status)
-                items = df[df['status'] == status]
+                items = df[df['status'] == status] if not df.empty else pd.DataFrame()
                 for _, item in items.iterrows():
                     with st.expander(f"{item['nome']}"):
                         st.write(item['servico'])
@@ -162,12 +183,13 @@ if login():
                 conn = sqlite3.connect('lian_car.db')
                 conn.execute("INSERT INTO despesas (descricao, valor, data) VALUES (?,?,?)", (desc, valor_d, str(datetime.now().date())))
                 conn.commit()
+                conn.close()
                 st.success("Gasto registrado!")
         
         conn = sqlite3.connect('lian_car.db')
         st.dataframe(pd.read_sql_query("SELECT * FROM despesas ORDER BY data DESC", conn), use_container_width=True)
+        conn.close()
 
 else:
     st.title("🚿 Lian Car")
     st.info("Acesse com suas credenciais para gerenciar o lava-jato.")
-
