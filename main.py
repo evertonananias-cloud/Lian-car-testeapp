@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
+import sqlite3
 from datetime import datetime, date
 
 # ======================================================
-# CONFIGURAÇÃO
+# CONFIGURAÇÃO E BANCO DE DADOS
 # ======================================================
 st.set_page_config(
     page_title="Lian Car | Gestão Automotiva",
@@ -11,125 +12,58 @@ st.set_page_config(
     layout="wide"
 )
 
+def get_connection():
+    return sqlite3.connect('lian_car_oficial.db', check_same_thread=False)
+
+def init_db():
+    conn = get_connection()
+    c = conn.cursor()
+    # Tabela de Agendamentos/Serviços
+    c.execute('''CREATE TABLE IF NOT EXISTS agendamentos 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, Data TEXT, Cliente TEXT, 
+                  Placa TEXT, Servico TEXT, Valor REAL, Status TEXT)''')
+    # Tabela de Despesas
+    c.execute('''CREATE TABLE IF NOT EXISTS despesas 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, Data TEXT, Descricao TEXT, Valor REAL)''')
+    # Tabela de Estoque
+    c.execute('''CREATE TABLE IF NOT EXISTS estoque 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, Item TEXT, Qtd INTEGER)''')
+    # Tabela de Fornecedores
+    c.execute('''CREATE TABLE IF NOT EXISTS fornecedores 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, Nome TEXT, Contato TEXT, Produto TEXT)''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
 # ======================================================
-# CSS PROFISSIONAL (FRONT-END NOVO)
+# CSS PROFISSIONAL
 # ======================================================
 st.markdown("""
 <style>
 :root {
-    --bg: #020617;
-    --card: #020617;
-    --border: #1e293b;
-    --primary: #0ea5e9;
-    --success: #22c55e;
-    --warning: #facc15;
-    --danger: #ef4444;
+    --bg: #020617; --card: #020617; --border: #1e293b;
+    --primary: #0ea5e9; --success: #22c55e; --warning: #facc15; --danger: #ef4444;
 }
-
-.stApp {
-    background: radial-gradient(circle at top, #020617, #000000);
-    color: #e5e7eb;
-    font-family: 'Inter', 'Segoe UI', sans-serif;
-}
-
-section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #020617, #020617);
-    border-right: 1px solid var(--border);
-}
-
-h1 { font-size: 32px; font-weight: 600; }
-h2 { font-size: 24px; }
-
-[data-testid="stMetric"] {
-    background: var(--card);
-    padding: 22px;
-    border-radius: 16px;
-    border: 1px solid var(--border);
-    box-shadow: 0 10px 30px rgba(0,0,0,.4);
-}
-
-[data-testid="stMetricValue"] {
-    color: var(--primary);
-    font-size: 30px;
-}
-
-.stButton>button {
-    background: linear-gradient(135deg, var(--primary), #38bdf8);
-    color: #020617;
-    font-weight: 600;
-    border-radius: 12px;
-    padding: 10px 22px;
-    border: none;
-    transition: .25s;
-}
-
-.stButton>button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(14,165,233,.4);
-}
-
-input, textarea, select {
-    background-color: #020617 !important;
-    color: #e5e7eb !important;
-    border-radius: 10px !important;
-    border: 1px solid var(--border) !important;
-}
-
-[data-testid="stDataFrame"] {
-    border-radius: 16px;
-    border: 1px solid var(--border);
-}
-
-.status-agendado { color: var(--warning); font-weight: 600; }
-.status-lavando { color: var(--primary); font-weight: 600; }
-.status-concluido { color: var(--success); font-weight: 600; }
-
-hr {
-    border: none;
-    height: 1px;
-    background: linear-gradient(to right, transparent, var(--border), transparent);
-    margin: 30px 0;
-}
+.stApp { background: radial-gradient(circle at top, #020617, #000000); color: #e5e7eb; }
+[data-testid="stMetric"] { background: var(--card); padding: 22px; border-radius: 16px; border: 1px solid var(--border); }
+.stButton>button { background: linear-gradient(135deg, var(--primary), #38bdf8); color: #020617; border-radius: 12px; }
+.status-agendado { color: var(--warning); font-weight: bold; }
+.status-lavando { color: var(--primary); font-weight: bold; }
+.status-concluido { color: var(--success); font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
 # ======================================================
-# ESTADO GLOBAL
-# ======================================================
-def init_state():
-    if "logado" not in st.session_state:
-        st.session_state.logado = False
-
-    if "db" not in st.session_state:
-        st.session_state.db = pd.DataFrame(
-            columns=["Data", "Cliente", "Placa", "Servico", "Valor", "Status"]
-        )
-
-    if "despesas" not in st.session_state:
-        st.session_state.despesas = pd.DataFrame(
-            columns=["Data", "Descricao", "Valor"]
-        )
-
-    if "estoque" not in st.session_state:
-        st.session_state.estoque = pd.DataFrame(
-            columns=["Item", "Qtd"]
-        )
-
-    if "fornecedores" not in st.session_state:
-        st.session_state.fornecedores = pd.DataFrame(
-            columns=["Nome", "Contato", "Produto"]
-        )
-
-init_state()
-
-# ======================================================
 # LOGIN
 # ======================================================
+if "logado" not in st.session_state:
+    st.session_state.logado = False
+
 def login():
     st.title("🔐 Acesso ao Sistema")
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
-
     if st.button("Entrar"):
         if usuario == "admin" and senha == "admin123":
             st.session_state.logado = True
@@ -146,9 +80,13 @@ if not st.session_state.logado:
 # ======================================================
 def dashboard():
     st.title("📊 Visão Geral")
+    conn = get_connection()
+    df_serv = pd.read_sql("SELECT Valor FROM agendamentos", conn)
+    df_desp = pd.read_sql("SELECT Valor FROM despesas", conn)
+    conn.close()
 
-    fat = st.session_state.db["Valor"].sum()
-    desp = st.session_state.despesas["Valor"].sum()
+    fat = df_serv["Valor"].sum()
+    desp = df_desp["Valor"].sum()
     lucro = fat - desp
 
     c1, c2, c3 = st.columns(3)
@@ -161,222 +99,40 @@ def dashboard():
 # ======================================================
 def agendamentos():
     st.title("📅 Agendamentos")
-
     with st.form("novo_agendamento"):
         cliente = st.text_input("Cliente")
         placa = st.text_input("Placa do Veículo")
         servico = st.text_input("Serviço")
         valor = st.number_input("Valor", min_value=0.0)
         data = st.date_input("Data", date.today())
-
         if st.form_submit_button("Cadastrar"):
-            novo = {
-                "Data": datetime.combine(data, datetime.min.time()),
-                "Cliente": cliente,
-                "Placa": placa,
-                "Servico": servico,
-                "Valor": valor,
-                "Status": "Agendado"
-            }
-            st.session_state.db = pd.concat(
-                [st.session_state.db, pd.DataFrame([novo])],
-                ignore_index=True
-            )
-            st.success("Agendamento criado")
+            conn = get_connection()
+            c = conn.cursor()
+            c.execute("INSERT INTO agendamentos (Data, Cliente, Placa, Servico, Valor, Status) VALUES (?,?,?,?,?,?)",
+                      (data.isoformat(), cliente, placa, servico, valor, "Agendado"))
+            conn.commit()
+            conn.close()
+            st.success("Agendamento criado!")
             st.rerun()
 
     st.divider()
-
-    if st.session_state.db.empty:
-        st.info("Nenhum agendamento")
-    else:
-        st.dataframe(st.session_state.db, use_container_width=True)
+    conn = get_connection()
+    df = pd.read_sql("SELECT * FROM agendamentos ORDER BY id DESC", conn)
+    conn.close()
+    st.dataframe(df, use_container_width=True)
 
 # ======================================================
 # PÁTIO
 # ======================================================
 def patio():
     st.title("🚗 Pátio Operacional")
-
-    df = st.session_state.db
+    conn = get_connection()
+    df = pd.read_sql("SELECT * FROM agendamentos WHERE Status != 'Concluído'", conn)
+    
     if df.empty:
-        st.info("Nenhum veículo no pátio")
+        st.info("Nenhum veículo em processo")
         return
 
-    for i in df.index:
-        status = df.at[i, "Status"]
-        classe = {
-            "Agendado": "status-agendado",
-            "Lavando": "status-lavando",
-            "Concluído": "status-concluido"
-        }[status]
-
-        st.markdown(
-            f"<b>{df.at[i,'Placa']}</b> — "
-            f"<span class='{classe}'>● {status}</span>",
-            unsafe_allow_html=True
-        )
-
-        novo = st.selectbox(
-            "Alterar status",
-            ["Agendado", "Lavando", "Concluído"],
-            index=["Agendado","Lavando","Concluído"].index(status),
-            key=f"patio_{i}"
-        )
-        df.at[i, "Status"] = novo
-
-# ======================================================
-# FINANCEIRO
-# ======================================================
-def financeiro():
-    st.title("💰 Financeiro")
-
-    col1, col2 = st.columns(2)
-    ini = col1.date_input("Data inicial", date.today())
-    fim = col2.date_input("Data final", date.today())
-
-    serv = st.session_state.db.copy()
-    desp = st.session_state.despesas.copy()
-
-    serv["Data"] = pd.to_datetime(serv["Data"], errors="coerce")
-    desp["Data"] = pd.to_datetime(desp["Data"], errors="coerce")
-
-    serv = serv[(serv["Data"].dt.date >= ini) & (serv["Data"].dt.date <= fim)]
-    desp = desp[(desp["Data"].dt.date >= ini) & (desp["Data"].dt.date <= fim)]
-
-    fat = serv["Valor"].sum()
-    des = desp["Valor"].sum()
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Faturamento", f"R$ {fat:,.2f}")
-    c2.metric("Despesas", f"R$ {des:,.2f}")
-    c3.metric("Lucro", f"R$ {fat-des:,.2f}")
-
-    st.divider()
-
-    with st.form("nova_despesa"):
-        desc = st.text_input("Descrição")
-        val = st.number_input("Valor", min_value=0.0)
-        data = st.date_input("Data", date.today())
-
-        if st.form_submit_button("Cadastrar Despesa"):
-            st.session_state.despesas = pd.concat(
-                [st.session_state.despesas,
-                 pd.DataFrame([{
-                     "Data": datetime.combine(data, datetime.min.time()),
-                     "Descricao": desc,
-                     "Valor": val
-                 }])],
-                ignore_index=True
-            )
-            st.success("Despesa registrada")
-            st.rerun()
-
-# ======================================================
-# RELATÓRIOS
-# ======================================================
-def relatorios():
-    st.title("📄 Relatórios")
-
-    df = st.session_state.db.copy()
-    if df.empty:
-        st.info("Sem dados")
-        return
-
-    df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
-
-    col1, col2 = st.columns(2)
-    ini = col1.date_input("Data inicial", date.today())
-    fim = col2.date_input("Data final", date.today())
-
-    df = df[(df["Data"].dt.date >= ini) & (df["Data"].dt.date <= fim)]
-
-    if df.empty:
-        st.warning("Nenhum registro no período")
-        return
-
-    st.dataframe(
-        df[["Data","Cliente","Placa","Servico","Valor","Status"]],
-        use_container_width=True
-    )
-
-    st.metric("Faturamento do período", f"R$ {df['Valor'].sum():,.2f}")
-
-# ======================================================
-# ESTOQUE
-# ======================================================
-def estoque():
-    st.title("📦 Estoque")
-
-    df = st.session_state.estoque
-    if df.empty:
-        st.info("Sem produtos")
-    else:
-        st.dataframe(df, use_container_width=True)
-
-    st.divider()
-    nome = st.text_input("Produto")
-    qtd = st.number_input("Quantidade", min_value=0, step=1)
-
-    if st.button("Salvar Produto"):
-        st.session_state.estoque = pd.concat(
-            [df, pd.DataFrame([{"Item": nome, "Qtd": qtd}])],
-            ignore_index=True
-        )
-        st.success("Produto salvo")
-        st.rerun()
-
-# ======================================================
-# FORNECEDORES
-# ======================================================
-def fornecedores():
-    st.title("🏭 Fornecedores")
-
-    with st.form("novo_fornecedor"):
-        nome = st.text_input("Nome")
-        contato = st.text_input("Contato")
-        produto = st.text_input("Produto")
-
-        if st.form_submit_button("Cadastrar"):
-            st.session_state.fornecedores = pd.concat(
-                [st.session_state.fornecedores,
-                 pd.DataFrame([{
-                     "Nome": nome,
-                     "Contato": contato,
-                     "Produto": produto
-                 }])],
-                ignore_index=True
-            )
-            st.success("Fornecedor cadastrado")
-            st.rerun()
-
-    if st.session_state.fornecedores.empty:
-        st.info("Nenhum fornecedor")
-    else:
-        st.dataframe(st.session_state.fornecedores, use_container_width=True)
-
-# ======================================================
-# MENU
-# ======================================================
-menu = st.sidebar.radio(
-    "Navegação",
-    [
-        "Dashboard",
-        "Agendamentos",
-        "Pátio",
-        "Financeiro",
-        "Relatórios",
-        "Estoque",
-        "Fornecedores"
-    ]
-)
-
-{
-    "Dashboard": dashboard,
-    "Agendamentos": agendamentos,
-    "Pátio": patio,
-    "Financeiro": financeiro,
-    "Relatórios": relatorios,
-    "Estoque": estoque,
-    "Fornecedores": fornecedores
-}[menu]()
+    for _, row in df.iterrows():
+        classe = {"Agendado": "status-agendado", "Lavando": "status-lavando"}.get(row['Status'], "")
+        st.markdown(f"<b>{row['Placa']}</b> ({row['Cliente']}) — <span class='{classe}'>● {row['Status']}</span>", unsafe_allow_html=True)
