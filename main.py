@@ -3,47 +3,92 @@ import pandas as pd
 from datetime import datetime, date
 
 # ======================================================
-# CONFIGURAÇÃO GERAL
+# CONFIGURAÇÃO
 # ======================================================
 st.set_page_config(
-    page_title="Lian Car v4.1",
+    page_title="Lian Car | Gestão Automotiva",
     page_icon="🧼",
     layout="wide"
 )
 
 # ======================================================
-# CSS PREMIUM (ATUAL)
+# CSS PROFISSIONAL (FRONT-END NOVO)
 # ======================================================
 st.markdown("""
 <style>
+:root {
+    --bg: #020617;
+    --card: #020617;
+    --border: #1e293b;
+    --primary: #0ea5e9;
+    --success: #22c55e;
+    --warning: #facc15;
+    --danger: #ef4444;
+}
+
 .stApp {
-    background: linear-gradient(135deg, #020617, #0f172a);
+    background: radial-gradient(circle at top, #020617, #000000);
     color: #e5e7eb;
-    font-family: 'Segoe UI', sans-serif;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
 }
+
 section[data-testid="stSidebar"] {
-    background: #020617;
-    border-right: 1px solid #1e293b;
+    background: linear-gradient(180deg, #020617, #020617);
+    border-right: 1px solid var(--border);
 }
+
+h1 { font-size: 32px; font-weight: 600; }
+h2 { font-size: 24px; }
+
 [data-testid="stMetric"] {
-    background: #020617;
-    padding: 20px;
-    border-radius: 14px;
-    border: 1px solid #1e293b;
+    background: var(--card);
+    padding: 22px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
 }
+
 [data-testid="stMetricValue"] {
-    color: #38bdf8;
-    font-size: 28px;
+    color: var(--primary);
+    font-size: 30px;
 }
+
 .stButton>button {
-    background: linear-gradient(135deg, #0284c7, #38bdf8);
+    background: linear-gradient(135deg, var(--primary), #38bdf8);
     color: #020617;
     font-weight: 600;
-    border-radius: 10px;
-}
-[data-testid="stDataFrame"] {
     border-radius: 12px;
-    border: 1px solid #1e293b;
+    padding: 10px 22px;
+    border: none;
+    transition: .25s;
+}
+
+.stButton>button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(14,165,233,.4);
+}
+
+input, textarea, select {
+    background-color: #020617 !important;
+    color: #e5e7eb !important;
+    border-radius: 10px !important;
+    border: 1px solid var(--border) !important;
+}
+
+[data-testid="stDataFrame"] {
+    border-radius: 16px;
+    border: 1px solid var(--border);
+}
+
+.status-agendado { color: var(--warning); font-weight: 600; }
+.status-lavando { color: var(--primary); font-weight: 600; }
+.status-concluido { color: var(--success); font-weight: 600; }
+
+hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--border), transparent);
+    margin: 30px 0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -82,7 +127,6 @@ init_state()
 # ======================================================
 def login():
     st.title("🔐 Acesso ao Sistema")
-
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
 
@@ -101,15 +145,15 @@ if not st.session_state.logado:
 # DASHBOARD
 # ======================================================
 def dashboard():
-    st.title("📊 Dashboard")
+    st.title("📊 Visão Geral")
 
-    faturamento = st.session_state.db["Valor"].sum()
-    despesas = st.session_state.despesas["Valor"].sum()
-    lucro = faturamento - despesas
+    fat = st.session_state.db["Valor"].sum()
+    desp = st.session_state.despesas["Valor"].sum()
+    lucro = fat - desp
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("💵 Faturamento", f"R$ {faturamento:,.2f}")
-    c2.metric("📉 Despesas", f"R$ {despesas:,.2f}")
+    c1.metric("💰 Faturamento", f"R$ {fat:,.2f}")
+    c2.metric("📉 Despesas", f"R$ {desp:,.2f}")
     c3.metric("📈 Lucro", f"R$ {lucro:,.2f}")
 
 # ======================================================
@@ -152,23 +196,34 @@ def agendamentos():
 # PÁTIO
 # ======================================================
 def patio():
-    st.title("🚗 Pátio")
+    st.title("🚗 Pátio Operacional")
 
     df = st.session_state.db
-
     if df.empty:
         st.info("Nenhum veículo no pátio")
         return
 
     for i in df.index:
-        st.write(f"**{df.at[i,'Placa']}** | {df.at[i,'Servico']}")
-        novo_status = st.selectbox(
-            "Status",
-            ["Agendado", "Lavando", "Concluído"],
-            index=["Agendado", "Lavando", "Concluído"].index(df.at[i,"Status"]),
-            key=f"status_{i}"
+        status = df.at[i, "Status"]
+        classe = {
+            "Agendado": "status-agendado",
+            "Lavando": "status-lavando",
+            "Concluído": "status-concluido"
+        }[status]
+
+        st.markdown(
+            f"<b>{df.at[i,'Placa']}</b> — "
+            f"<span class='{classe}'>● {status}</span>",
+            unsafe_allow_html=True
         )
-        df.at[i, "Status"] = novo_status
+
+        novo = st.selectbox(
+            "Alterar status",
+            ["Agendado", "Lavando", "Concluído"],
+            index=["Agendado","Lavando","Concluído"].index(status),
+            key=f"patio_{i}"
+        )
+        df.at[i, "Status"] = novo
 
 # ======================================================
 # FINANCEIRO
@@ -180,14 +235,14 @@ def financeiro():
     ini = col1.date_input("Data inicial", date.today())
     fim = col2.date_input("Data final", date.today())
 
-    df_serv = st.session_state.db.copy()
-    df_desp = st.session_state.despesas.copy()
+    serv = st.session_state.db.copy()
+    desp = st.session_state.despesas.copy()
 
-    df_serv["Data"] = pd.to_datetime(df_serv["Data"], errors="coerce")
-    df_desp["Data"] = pd.to_datetime(df_desp["Data"], errors="coerce")
+    serv["Data"] = pd.to_datetime(serv["Data"], errors="coerce")
+    desp["Data"] = pd.to_datetime(desp["Data"], errors="coerce")
 
-    serv = df_serv[(df_serv["Data"].dt.date >= ini) & (df_serv["Data"].dt.date <= fim)]
-    desp = df_desp[(df_desp["Data"].dt.date >= ini) & (df_desp["Data"].dt.date <= fim)]
+    serv = serv[(serv["Data"].dt.date >= ini) & (serv["Data"].dt.date <= fim)]
+    desp = desp[(desp["Data"].dt.date >= ini) & (desp["Data"].dt.date <= fim)]
 
     fat = serv["Valor"].sum()
     des = desp["Valor"].sum()
@@ -202,7 +257,7 @@ def financeiro():
     with st.form("nova_despesa"):
         desc = st.text_input("Descrição")
         val = st.number_input("Valor", min_value=0.0)
-        data = st.date_input("Data da despesa", date.today())
+        data = st.date_input("Data", date.today())
 
         if st.form_submit_button("Cadastrar Despesa"):
             st.session_state.despesas = pd.concat(
@@ -224,9 +279,8 @@ def relatorios():
     st.title("📄 Relatórios")
 
     df = st.session_state.db.copy()
-
     if df.empty:
-        st.info("Nenhum dado disponível")
+        st.info("Sem dados")
         return
 
     df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
@@ -235,24 +289,18 @@ def relatorios():
     ini = col1.date_input("Data inicial", date.today())
     fim = col2.date_input("Data final", date.today())
 
-    filtrado = df[
-        (df["Data"].dt.date >= ini) &
-        (df["Data"].dt.date <= fim)
-    ]
+    df = df[(df["Data"].dt.date >= ini) & (df["Data"].dt.date <= fim)]
 
-    if filtrado.empty:
+    if df.empty:
         st.warning("Nenhum registro no período")
         return
 
     st.dataframe(
-        filtrado[["Data", "Cliente", "Placa", "Servico", "Valor", "Status"]],
+        df[["Data","Cliente","Placa","Servico","Valor","Status"]],
         use_container_width=True
     )
 
-    st.metric(
-        "💰 Faturamento do Período",
-        f"R$ {filtrado['Valor'].sum():,.2f}"
-    )
+    st.metric("Faturamento do período", f"R$ {df['Valor'].sum():,.2f}")
 
 # ======================================================
 # ESTOQUE
@@ -261,14 +309,12 @@ def estoque():
     st.title("📦 Estoque")
 
     df = st.session_state.estoque
-
     if df.empty:
         st.info("Sem produtos")
     else:
         st.dataframe(df, use_container_width=True)
 
     st.divider()
-
     nome = st.text_input("Produto")
     qtd = st.number_input("Quantidade", min_value=0, step=1)
 
