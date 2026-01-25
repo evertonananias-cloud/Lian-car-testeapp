@@ -3,16 +3,16 @@ import pandas as pd
 from datetime import datetime, date
 
 # ======================================================
-# CONFIGURAÇÃO
+# CONFIGURAÇÃO GERAL
 # ======================================================
 st.set_page_config(
-    page_title="Lian Car v4.0",
+    page_title="Lian Car v4.1",
     page_icon="🧼",
     layout="wide"
 )
 
 # ======================================================
-# CSS PREMIUM (SEGURO)
+# CSS PREMIUM (ATUAL)
 # ======================================================
 st.markdown("""
 <style>
@@ -21,31 +21,26 @@ st.markdown("""
     color: #e5e7eb;
     font-family: 'Segoe UI', sans-serif;
 }
-
 section[data-testid="stSidebar"] {
     background: #020617;
     border-right: 1px solid #1e293b;
 }
-
 [data-testid="stMetric"] {
     background: #020617;
     padding: 20px;
     border-radius: 14px;
     border: 1px solid #1e293b;
 }
-
 [data-testid="stMetricValue"] {
     color: #38bdf8;
     font-size: 28px;
 }
-
 .stButton>button {
     background: linear-gradient(135deg, #0284c7, #38bdf8);
     color: #020617;
     font-weight: 600;
     border-radius: 10px;
 }
-
 [data-testid="stDataFrame"] {
     border-radius: 12px;
     border: 1px solid #1e293b;
@@ -166,9 +161,7 @@ def patio():
         return
 
     for i in df.index:
-        st.write(
-            f"**{df.at[i,'Placa']}** | {df.at[i,'Servico']} | {df.at[i,'Status']}"
-        )
+        st.write(f"**{df.at[i,'Placa']}** | {df.at[i,'Servico']}")
         novo_status = st.selectbox(
             "Status",
             ["Agendado", "Lavando", "Concluído"],
@@ -223,6 +216,43 @@ def financeiro():
             )
             st.success("Despesa registrada")
             st.rerun()
+
+# ======================================================
+# RELATÓRIOS
+# ======================================================
+def relatorios():
+    st.title("📄 Relatórios")
+
+    df = st.session_state.db.copy()
+
+    if df.empty:
+        st.info("Nenhum dado disponível")
+        return
+
+    df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+
+    col1, col2 = st.columns(2)
+    ini = col1.date_input("Data inicial", date.today())
+    fim = col2.date_input("Data final", date.today())
+
+    filtrado = df[
+        (df["Data"].dt.date >= ini) &
+        (df["Data"].dt.date <= fim)
+    ]
+
+    if filtrado.empty:
+        st.warning("Nenhum registro no período")
+        return
+
+    st.dataframe(
+        filtrado[["Data", "Cliente", "Placa", "Servico", "Valor", "Status"]],
+        use_container_width=True
+    )
+
+    st.metric(
+        "💰 Faturamento do Período",
+        f"R$ {filtrado['Valor'].sum():,.2f}"
+    )
 
 # ======================================================
 # ESTOQUE
@@ -289,6 +319,7 @@ menu = st.sidebar.radio(
         "Agendamentos",
         "Pátio",
         "Financeiro",
+        "Relatórios",
         "Estoque",
         "Fornecedores"
     ]
@@ -299,6 +330,7 @@ menu = st.sidebar.radio(
     "Agendamentos": agendamentos,
     "Pátio": patio,
     "Financeiro": financeiro,
+    "Relatórios": relatorios,
     "Estoque": estoque,
     "Fornecedores": fornecedores
 }[menu]()
