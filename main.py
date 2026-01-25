@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import hashlib
+from io import BytesIO
 
 # ======================================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -19,56 +20,41 @@ st.set_page_config(
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
-# ======================================================
-# USUÁRIOS (TEMPORÁRIO)
-# ======================================================
-USERS = {
-    "admin": {
-        "name": "Administrador",
-        "password": hash_password("123456")
-    },
-    "lian": {
-        "name": "Lian Car",
-        "password": hash_password("lian123")
-    }
-}
-
 STATUS_PATIO = ["Agendado", "Lavando", "Concluído"]
 
+USERS = {
+    "admin": {"name": "Administrador", "password": hash_password("123456")},
+    "lian": {"name": "Lian Car", "password": hash_password("lian123")},
+}
+
 # ======================================================
-# CSS GLOBAL (UI PREMIUM)
+# CSS
 # ======================================================
-def load_css():
-    st.markdown("""
-        <style>
-        [data-testid="stMetricValue"] {
-            color: #00d4ff;
-            font-size: 32px;
-            font-weight: bold;
-        }
-
-        section[data-testid="stSidebar"] {
-            background-color: #0e1117;
-        }
-
-        .patio-card {
-            border: 1px solid #2b2b2b;
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 10px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-load_css()
+st.markdown("""
+<style>
+[data-testid="stMetricValue"] {
+    color: #00d4ff;
+    font-size: 32px;
+    font-weight: bold;
+}
+section[data-testid="stSidebar"] {
+    background-color: #0e1117;
+}
+.card {
+    border: 1px solid #2b2b2b;
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ======================================================
 # SESSION STATE
 # ======================================================
-def init_session_state():
+def init_state():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
-
     if "user" not in st.session_state:
         st.session_state.user = None
 
@@ -84,24 +70,26 @@ def init_session_state():
             {"Item": "Cera", "Qtd": 50},
         ])
 
-init_session_state()
+    if "fornecedores" not in st.session_state:
+        st.session_state.fornecedores = pd.DataFrame(
+            columns=["Empresa", "Contato", "Telefone", "Produto"]
+        )
+
+init_state()
 
 # ======================================================
-# AUTENTICAÇÃO
+# LOGIN
 # ======================================================
 def login_screen():
     st.title("🔐 Login - Lian Car")
 
     with st.form("login"):
-        username = st.text_input("Usuário")
-        password = st.text_input("Senha", type="password")
-        submit = st.form_submit_button("Entrar")
-
-        if submit:
-            if username in USERS and hash_password(password) == USERS[username]["password"]:
+        user = st.text_input("Usuário")
+        pwd = st.text_input("Senha", type="password")
+        if st.form_submit_button("Entrar"):
+            if user in USERS and hash_password(pwd) == USERS[user]["password"]:
                 st.session_state.authenticated = True
-                st.session_state.user = USERS[username]["name"]
-                st.success("Login realizado com sucesso!")
+                st.session_state.user = USERS[user]["name"]
                 st.rerun()
             else:
                 st.error("Usuário ou senha inválidos")
@@ -110,7 +98,7 @@ def login_screen():
 # SIDEBAR
 # ======================================================
 def sidebar_menu():
-    st.sidebar.title("🧼 Lian Car v2.0")
+    st.sidebar.title("🧼 Lian Car v3.0")
     st.sidebar.markdown(f"👤 **{st.session_state.user}**")
 
     if st.sidebar.button("🚪 Logout"):
@@ -120,7 +108,15 @@ def sidebar_menu():
 
     return st.sidebar.radio(
         "Navegação",
-        ["Dashboard", "Agendamentos", "Pátio", "Estoque", "Fornecedores"]
+        [
+            "Dashboard",
+            "Agendamentos",
+            "Pátio",
+            "Financeiro",
+            "Relatórios",
+            "Estoque",
+            "Fornecedores",
+        ]
     )
 
 # ======================================================
@@ -129,25 +125,19 @@ def sidebar_menu():
 def render_dashboard():
     st.title("📈 Dashboard")
 
-    faturamento = st.session_state.db["Valor"].sum()
-    total = len(st.session_state.db)
-    ticket = faturamento / total if total > 0 else 0
+    df = st.session_state.db
+    concluido = df[df["Status"] == "Concluído"]
+
+    faturamento = concluido["Valor"].sum()
+    total = len(df)
+    ticket = faturamento / len(concluido) if len(concluido) else 0
 
     c1, c2, c3 = st.columns(3)
     c1.metric("💰 Faturamento", f"R$ {faturamento:,.2f}")
     c2.metric("🧽 Serviços", total)
     c3.metric("📊 Ticket Médio", f"R$ {ticket:,.2f}")
 
-    st.divider()
-    st.subheader("📋 Últimos Serviços")
-
-    if st.session_state.db.empty:
-        st.info("Nenhum registro ainda.")
-    else:
-        st.dataframe(
-            st.session_state.db.sort_values("Data", ascending=False),
-            use_container_width=True
-        )
+    st.dataframe(df.sort_values("Data", ascending=False), use_container_width=True)
 
 # ======================================================
 # AGENDAMENTOS
@@ -157,18 +147,13 @@ def render_agendamentos():
 
     with st.form("agendamento"):
         cliente = st.text_input("Cliente")
-        placa = st.text_input("Placa do Veículo", max_chars=7).upper()
-        servico = st.selectbox(
-            "Serviço",
-            ["Lavagem Simples", "Lavagem Completa", "Polimento"]
-        )
+        placa = st.text_input("Placa", max_chars=7).upper()
+        servico = st.selectbox("Serviço", ["Lavagem Simples", "Lavagem Completa", "Polimento"])
         valor = st.number_input("Valor (R$)", min_value=0.0, step=10.0)
 
-        submit = st.form_submit_button("Salvar")
-
-        if submit:
+        if st.form_submit_button("Salvar"):
             if not cliente or not placa:
-                st.error("Cliente e placa são obrigatórios.")
+                st.error("Cliente e placa obrigatórios")
                 return
 
             novo = {
@@ -185,68 +170,118 @@ def render_agendamentos():
                 [st.session_state.db, pd.DataFrame([novo])],
                 ignore_index=True
             )
-
-            st.success("Agendamento cadastrado com sucesso!")
+            st.success("Agendamento cadastrado!")
 
 # ======================================================
-# PÁTIO OPERACIONAL
+# PÁTIO
 # ======================================================
 def render_patio():
-    st.title("🚗 Pátio Operacional")
+    st.title("🚗 Pátio")
 
-    if st.session_state.db.empty:
-        st.info("Nenhum veículo no pátio.")
-        return
+    for status in STATUS_PATIO:
+        st.subheader(status)
+        df = st.session_state.db[st.session_state.db["Status"] == status]
 
-    col1, col2, col3 = st.columns(3)
-    cols = dict(zip(STATUS_PATIO, [col1, col2, col3]))
+        for idx, row in df.iterrows():
+            st.markdown(f"""
+            <div class="card">
+            <b>{row['Cliente']}</b><br>
+            🚘 {row['Placa']}<br>
+            🧽 {row['Serviço']}
+            </div>
+            """, unsafe_allow_html=True)
 
-    for status, coluna in cols.items():
-        with coluna:
-            st.subheader(status)
+            if status == "Agendado":
+                if st.button("▶️ Iniciar", key=f"i{idx}"):
+                    st.session_state.db.at[idx, "Status"] = "Lavando"
+                    st.rerun()
+            elif status == "Lavando":
+                if st.button("✅ Finalizar", key=f"f{idx}"):
+                    st.session_state.db.at[idx, "Status"] = "Concluído"
+                    st.rerun()
 
-            df_status = st.session_state.db[
-                st.session_state.db["Status"] == status
-            ]
+# ======================================================
+# FINANCEIRO
+# ======================================================
+def render_financeiro():
+    st.title("💰 Financeiro")
 
-            if df_status.empty:
-                st.caption("Sem veículos")
-            else:
-                for idx, row in df_status.iterrows():
-                    st.markdown(f"""
-                        <div class="patio-card">
-                        <b>{row['Cliente']}</b><br>
-                        🚘 {row['Placa']}<br>
-                        🧽 {row['Serviço']}
-                        </div>
-                    """, unsafe_allow_html=True)
+    df = st.session_state.db
+    concluido = df[df["Status"] == "Concluído"]
 
-                    if status == "Agendado":
-                        if st.button("▶️ Iniciar Lavagem", key=f"lavar_{idx}"):
-                            st.session_state.db.at[idx, "Status"] = "Lavando"
-                            st.rerun()
+    st.metric("Faturamento Total", f"R$ {concluido['Valor'].sum():,.2f}")
+    st.metric("Em Aberto", f"R$ {df[df['Status'] != 'Concluído']['Valor'].sum():,.2f}")
 
-                    elif status == "Lavando":
-                        if st.button("✅ Finalizar", key=f"finalizar_{idx}"):
-                            st.session_state.db.at[idx, "Status"] = "Concluído"
-                            st.rerun()
+# ======================================================
+# RELATÓRIOS
+# ======================================================
+def render_relatorios():
+    st.title("📄 Relatórios")
+
+    df = st.session_state.db
+    data_ini = st.date_input("Data inicial")
+    data_fim = st.date_input("Data final")
+
+    mask = (df["Data"].dt.date >= data_ini) & (df["Data"].dt.date <= data_fim)
+    df_f = df[mask]
+
+    st.dataframe(df_f, use_container_width=True)
+
+    buffer = BytesIO()
+    df_f.to_excel(buffer, index=False)
+    st.download_button(
+        "📥 Baixar Excel",
+        buffer.getvalue(),
+        "relatorio.xlsx"
+    )
 
 # ======================================================
 # ESTOQUE
 # ======================================================
 def render_estoque():
     st.title("📦 Estoque")
-    st.dataframe(st.session_state.estoque, use_container_width=True)
+    df = st.session_state.estoque
+    st.dataframe(df, use_container_width=True)
+
+    item = st.selectbox("Item", df["Item"])
+    qtd = st.number_input("Quantidade", min_value=1)
+    acao = st.radio("Ação", ["Entrada", "Saída"])
+
+    if st.button("Confirmar"):
+        idx = df[df["Item"] == item].index[0]
+        if acao == "Saída" and df.at[idx, "Qtd"] < qtd:
+            st.error("Estoque insuficiente")
+            return
+        df.at[idx, "Qtd"] += qtd if acao == "Entrada" else -qtd
+        st.rerun()
 
 # ======================================================
 # FORNECEDORES
 # ======================================================
 def render_fornecedores():
     st.title("🚚 Fornecedores")
-    st.info("Módulo em desenvolvimento")
+    st.dataframe(st.session_state.fornecedores, use_container_width=True)
+
+    with st.form("fornecedor"):
+        empresa = st.text_input("Empresa")
+        contato = st.text_input("Contato")
+        telefone = st.text_input("Telefone")
+        produto = st.text_input("Produto")
+
+        if st.form_submit_button("Cadastrar"):
+            st.session_state.fornecedores = pd.concat(
+                [st.session_state.fornecedores, pd.DataFrame([{
+                    "Empresa": empresa,
+                    "Contato": contato,
+                    "Telefone": telefone,
+                    "Produto": produto
+                }])],
+                ignore_index=True
+            )
+            st.success("Fornecedor cadastrado!")
 
 # ======================================================
-# APP PRINCIPAL
+# APP
 # ======================================================
 if not st.session_state.authenticated:
     login_screen()
@@ -259,6 +294,10 @@ else:
         render_agendamentos()
     elif menu == "Pátio":
         render_patio()
+    elif menu == "Financeiro":
+        render_financeiro()
+    elif menu == "Relatórios":
+        render_relatorios()
     elif menu == "Estoque":
         render_estoque()
     elif menu == "Fornecedores":
