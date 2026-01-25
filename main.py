@@ -6,14 +6,112 @@ from datetime import datetime, date
 # CONFIGURAÇÃO
 # ======================================================
 st.set_page_config(
-    page_title="Lian Car v3.3",
+    page_title="Lian Car v3.4",
     page_icon="🧼",
     layout="wide"
 )
 
+# ======================================================
+# CSS PREMIUM (CORRIGIDA E ESTÁVEL)
+# ======================================================
 st.markdown("""
 <style>
-[data-testid="stMetricValue"] { color:#00d4ff; font-size:28px; }
+
+/* Fonte global */
+html, body, [class*="css"] {
+    font-family: 'Segoe UI', 'Inter', sans-serif;
+}
+
+/* Fundo geral */
+.stApp {
+    background: linear-gradient(135deg, #0f172a, #020617);
+    color: #e5e7eb;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #020617, #020617);
+    border-right: 1px solid #1e293b;
+}
+section[data-testid="stSidebar"] * {
+    color: #e5e7eb !important;
+}
+
+/* Títulos */
+h1, h2, h3 {
+    font-weight: 600;
+    letter-spacing: 0.4px;
+}
+
+/* Métricas */
+[data-testid="stMetric"] {
+    background: rgba(2, 6, 23, 0.85);
+    padding: 20px;
+    border-radius: 14px;
+    border: 1px solid #1e293b;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.45);
+}
+[data-testid="stMetricValue"] {
+    color: #38bdf8;
+    font-size: 30px;
+}
+
+/* Botões */
+.stButton > button {
+    background: linear-gradient(135deg, #0284c7, #38bdf8);
+    color: #020617;
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-weight: 600;
+    border: none;
+    transition: all 0.2s ease-in-out;
+}
+.stButton > button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 8px 25px rgba(56,189,248,0.45);
+}
+
+/* Inputs */
+input, textarea, select {
+    background-color: #020617 !important;
+    color: #e5e7eb !important;
+    border-radius: 8px !important;
+    border: 1px solid #1e293b !important;
+}
+
+/* Tabelas */
+[data-testid="stDataFrame"] {
+    background-color: #020617;
+    border-radius: 14px;
+    border: 1px solid #1e293b;
+    padding: 10px;
+}
+
+/* Abas */
+.stTabs [data-baseweb="tab"] {
+    background-color: #020617;
+    border-radius: 12px 12px 0 0;
+    padding: 10px 18px;
+    font-weight: 500;
+}
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, #0284c7, #38bdf8);
+    color: #020617;
+}
+
+/* Alertas */
+.stAlert {
+    border-radius: 12px;
+}
+
+/* Divisor */
+hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #1e293b, transparent);
+    margin: 30px 0;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -50,10 +148,8 @@ def init_state():
         st.session_state.db = pd.DataFrame(
             columns=["Data", "Cliente", "Placa", "Servico", "Valor", "Status"]
         )
-
     if "estoque" not in st.session_state:
         st.session_state.estoque = pd.DataFrame(columns=["Item", "Qtd"])
-
     if "fornecedores" not in st.session_state:
         st.session_state.fornecedores = pd.DataFrame(
             columns=["Empresa", "Contato", "Telefone", "Produto"]
@@ -64,7 +160,7 @@ init_state()
 # ======================================================
 # MENU
 # ======================================================
-st.sidebar.title("🧼 Lian Car v3.3")
+st.sidebar.title("🧼 Lian Car v3.4")
 st.sidebar.write(f"👤 {st.session_state.usuario}")
 
 menu = st.sidebar.radio(
@@ -139,7 +235,7 @@ def financeiro():
     st.dataframe(df[["Data", "Cliente", "Servico", "Valor"]], use_container_width=True)
 
 # ======================================================
-# RELATÓRIOS (CORRIGIDO)
+# RELATÓRIOS
 # ======================================================
 def relatorios():
     st.title("📄 Relatórios")
@@ -147,17 +243,17 @@ def relatorios():
     df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
 
     c1, c2 = st.columns(2)
-    data_ini = c1.date_input("Data inicial", date.today())
-    data_fim = c2.date_input("Data final", date.today())
+    ini = c1.date_input("Data inicial", date.today())
+    fim = c2.date_input("Data final", date.today())
 
-    filtro = (df["Data"].dt.date >= data_ini) & (df["Data"].dt.date <= data_fim)
+    filtro = (df["Data"].dt.date >= ini) & (df["Data"].dt.date <= fim)
     df_f = df.loc[filtro]
 
     st.dataframe(df_f, use_container_width=True)
     st.metric("Faturamento", f"R$ {df_f['Valor'].sum():,.2f}")
 
 # ======================================================
-# ESTOQUE (TOTALMENTE CORRIGIDO)
+# ESTOQUE
 # ======================================================
 def estoque():
     st.title("📦 Gestão de Estoque")
@@ -241,7 +337,6 @@ def estoque():
 # ======================================================
 def fornecedores():
     st.title("🚚 Fornecedores")
-
     st.dataframe(st.session_state.fornecedores, use_container_width=True)
 
     with st.form("form_fornecedor"):
