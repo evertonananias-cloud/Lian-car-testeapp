@@ -1,304 +1,246 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-import hashlib
-from io import BytesIO
+from datetime import datetime, date
 
-# ======================================================
-# CONFIGURAÇÃO DA PÁGINA
-# ======================================================
-st.set_page_config(
-    page_title="Lian Car App",
-    page_icon="🧼",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# =========================
+# CONFIG
+# =========================
+st.set_page_config("🧼 Lian Car v3.2", "🧼", layout="wide")
 
-# ======================================================
-# UTILIDADES
-# ======================================================
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
-
-STATUS_PATIO = ["Agendado", "Lavando", "Concluído"]
-
-USERS = {
-    "admin": {"name": "Administrador", "password": hash_password("123456")},
-    "lian": {"name": "Lian Car", "password": hash_password("lian123")},
-}
-
-# ======================================================
-# CSS
-# ======================================================
 st.markdown("""
 <style>
-[data-testid="stMetricValue"] {
-    color: #00d4ff;
-    font-size: 32px;
-    font-weight: bold;
-}
-section[data-testid="stSidebar"] {
-    background-color: #0e1117;
-}
-.card {
-    border: 1px solid #2b2b2b;
-    border-radius: 12px;
-    padding: 10px;
-    margin-bottom: 10px;
-}
+[data-testid="stMetricValue"] { color:#00d4ff; font-size:28px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ======================================================
-# SESSION STATE
-# ======================================================
-def init_state():
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-    if "user" not in st.session_state:
-        st.session_state.user = None
+# =========================
+# LOGIN
+# =========================
+USUARIOS = {"admin": "1234"}
 
+def login():
+    st.title("🔐 Login - Lian Car")
+    u = st.text_input("Usuário")
+    s = st.text_input("Senha", type="password")
+    if st.button("Entrar"):
+        if u in USUARIOS and USUARIOS[u] == s:
+            st.session_state.logado = True
+            st.session_state.usuario = u
+            st.rerun()
+        else:
+            st.error("Credenciais inválidas")
+
+if "logado" not in st.session_state:
+    st.session_state.logado = False
+
+if not st.session_state.logado:
+    login()
+    st.stop()
+
+# =========================
+# STATE
+# =========================
+def init():
     if "db" not in st.session_state:
         st.session_state.db = pd.DataFrame(
-            columns=["id", "Data", "Cliente", "Placa", "Serviço", "Valor", "Status"]
+            columns=["Data","Cliente","Placa","Servico","Valor","Status"]
         )
-
     if "estoque" not in st.session_state:
-        st.session_state.estoque = pd.DataFrame([
-            {"Item": "Shampoo 5L", "Qtd": 80},
-            {"Item": "Pretinho", "Qtd": 30},
-            {"Item": "Cera", "Qtd": 50},
-        ])
-
+        st.session_state.estoque = pd.DataFrame(columns=["Item","Qtd"])
     if "fornecedores" not in st.session_state:
         st.session_state.fornecedores = pd.DataFrame(
-            columns=["Empresa", "Contato", "Telefone", "Produto"]
+            columns=["Empresa","Contato","Telefone","Produto"]
         )
 
-init_state()
+init()
 
-# ======================================================
-# LOGIN
-# ======================================================
-def login_screen():
-    st.title("🔐 Login - Lian Car")
+# =========================
+# MENU
+# =========================
+st.sidebar.title("🧼 Lian Car v3.2")
+st.sidebar.write(f"👤 {st.session_state.usuario}")
 
-    with st.form("login"):
-        user = st.text_input("Usuário")
-        pwd = st.text_input("Senha", type="password")
-        if st.form_submit_button("Entrar"):
-            if user in USERS and hash_password(pwd) == USERS[user]["password"]:
-                st.session_state.authenticated = True
-                st.session_state.user = USERS[user]["name"]
-                st.rerun()
-            else:
-                st.error("Usuário ou senha inválidos")
+menu = st.sidebar.radio(
+    "Navegação",
+    ["Dashboard","Agendamentos","Pátio","Financeiro","Relatórios","Estoque","Fornecedores"]
+)
 
-# ======================================================
-# SIDEBAR
-# ======================================================
-def sidebar_menu():
-    st.sidebar.title("🧼 Lian Car v3.0")
-    st.sidebar.markdown(f"👤 **{st.session_state.user}**")
-
-    if st.sidebar.button("🚪 Logout"):
-        st.session_state.authenticated = False
-        st.session_state.user = None
-        st.rerun()
-
-    return st.sidebar.radio(
-        "Navegação",
-        [
-            "Dashboard",
-            "Agendamentos",
-            "Pátio",
-            "Financeiro",
-            "Relatórios",
-            "Estoque",
-            "Fornecedores",
-        ]
-    )
-
-# ======================================================
+# =========================
 # DASHBOARD
-# ======================================================
-def render_dashboard():
-    st.title("📈 Dashboard")
+# =========================
+def dashboard():
+    st.title("📊 Dashboard")
+    df = st.session_state.db.copy()
+    df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
 
-    df = st.session_state.db
-    concluido = df[df["Status"] == "Concluído"]
+    c1,c2,c3 = st.columns(3)
+    c1.metric("Faturamento", f"R$ {df['Valor'].sum():,.2f}")
+    c2.metric("Serviços", len(df))
+    c3.metric("Ticket Médio", f"R$ {df['Valor'].mean() if len(df) else 0:,.2f}")
 
-    faturamento = concluido["Valor"].sum()
-    total = len(df)
-    ticket = faturamento / len(concluido) if len(concluido) else 0
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("💰 Faturamento", f"R$ {faturamento:,.2f}")
-    c2.metric("🧽 Serviços", total)
-    c3.metric("📊 Ticket Médio", f"R$ {ticket:,.2f}")
-
-    st.dataframe(df.sort_values("Data", ascending=False), use_container_width=True)
-
-# ======================================================
+# =========================
 # AGENDAMENTOS
-# ======================================================
-def render_agendamentos():
-    st.title("📅 Novo Agendamento")
+# =========================
+def agendamentos():
+    st.title("📅 Agendamentos")
 
-    with st.form("agendamento"):
+    with st.form("novo"):
         cliente = st.text_input("Cliente")
-        placa = st.text_input("Placa", max_chars=7).upper()
-        servico = st.selectbox("Serviço", ["Lavagem Simples", "Lavagem Completa", "Polimento"])
-        valor = st.number_input("Valor (R$)", min_value=0.0, step=10.0)
+        placa = st.text_input("Placa")
+        servico = st.text_input("Serviço")
+        valor = st.number_input("Valor", 0.0, step=10.0)
+        status = st.selectbox("Status", ["Agendado","Lavando","Concluído"])
 
-        if st.form_submit_button("Salvar"):
-            if not cliente or not placa:
-                st.error("Cliente e placa obrigatórios")
-                return
-
+        if st.form_submit_button("Cadastrar"):
             novo = {
-                "id": len(st.session_state.db) + 1,
                 "Data": datetime.now(),
                 "Cliente": cliente,
                 "Placa": placa,
-                "Serviço": servico,
+                "Servico": servico,
                 "Valor": valor,
-                "Status": "Agendado",
+                "Status": status
             }
-
             st.session_state.db = pd.concat(
                 [st.session_state.db, pd.DataFrame([novo])],
                 ignore_index=True
             )
-            st.success("Agendamento cadastrado!")
+            st.success("Serviço cadastrado")
+            st.rerun()
 
-# ======================================================
+    st.dataframe(st.session_state.db, use_container_width=True)
+
+# =========================
 # PÁTIO
-# ======================================================
-def render_patio():
+# =========================
+def patio():
     st.title("🚗 Pátio")
+    df = st.session_state.db
+    for s in ["Agendado","Lavando","Concluído"]:
+        st.subheader(s)
+        st.dataframe(df[df["Status"] == s], use_container_width=True)
 
-    for status in STATUS_PATIO:
-        st.subheader(status)
-        df = st.session_state.db[st.session_state.db["Status"] == status]
-
-        for idx, row in df.iterrows():
-            st.markdown(f"""
-            <div class="card">
-            <b>{row['Cliente']}</b><br>
-            🚘 {row['Placa']}<br>
-            🧽 {row['Serviço']}
-            </div>
-            """, unsafe_allow_html=True)
-
-            if status == "Agendado":
-                if st.button("▶️ Iniciar", key=f"i{idx}"):
-                    st.session_state.db.at[idx, "Status"] = "Lavando"
-                    st.rerun()
-            elif status == "Lavando":
-                if st.button("✅ Finalizar", key=f"f{idx}"):
-                    st.session_state.db.at[idx, "Status"] = "Concluído"
-                    st.rerun()
-
-# ======================================================
+# =========================
 # FINANCEIRO
-# ======================================================
-def render_financeiro():
+# =========================
+def financeiro():
     st.title("💰 Financeiro")
+    df = st.session_state.db.copy()
+    df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+    st.metric("Total Geral", f"R$ {df['Valor'].sum():,.2f}")
+    st.dataframe(df[["Data","Cliente","Servico","Valor"]])
 
-    df = st.session_state.db
-    concluido = df[df["Status"] == "Concluído"]
-
-    st.metric("Faturamento Total", f"R$ {concluido['Valor'].sum():,.2f}")
-    st.metric("Em Aberto", f"R$ {df[df['Status'] != 'Concluído']['Valor'].sum():,.2f}")
-
-# ======================================================
-# RELATÓRIOS
-# ======================================================
-def render_relatorios():
+# =========================
+# RELATÓRIOS (CORRIGIDO)
+# =========================
+def relatorios():
     st.title("📄 Relatórios")
+    df = st.session_state.db.copy()
+    df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
 
-    df = st.session_state.db
-    data_ini = st.date_input("Data inicial")
-    data_fim = st.date_input("Data final")
+    c1,c2 = st.columns(2)
+    ini = c1.date_input("Data inicial", date.today())
+    fim = c2.date_input("Data final", date.today())
 
-    mask = (df["Data"].dt.date >= data_ini) & (df["Data"].dt.date <= data_fim)
-    df_f = df[mask]
+    filtro = (df["Data"].dt.date >= ini) & (df["Data"].dt.date <= fim)
+    df_f = df.loc[filtro]
 
     st.dataframe(df_f, use_container_width=True)
+    st.metric("Faturamento", f"R$ {df_f['Valor'].sum():,.2f}")
 
-    buffer = BytesIO()
-    df_f.to_excel(buffer, index=False)
-    st.download_button(
-        "📥 Baixar Excel",
-        buffer.getvalue(),
-        "relatorio.xlsx"
-    )
-
-# ======================================================
-# ESTOQUE
-# ======================================================
-def render_estoque():
-    st.title("📦 Estoque")
+# =========================
+# ESTOQUE (COMPLETO)
+# =========================
+def estoque():
+    st.title("📦 Gestão de Estoque")
     df = st.session_state.estoque
-    st.dataframe(df, use_container_width=True)
 
-    item = st.selectbox("Item", df["Item"])
-    qtd = st.number_input("Quantidade", min_value=1)
-    acao = st.radio("Ação", ["Entrada", "Saída"])
+    st.subheader("📋 Estoque Atual")
+    st.dataframe(df, use_container_width=True) if not df.empty else st.info("Sem produtos")
+
+    st.divider()
+    st.subheader("➕➖ Cadastrar / Editar Produto")
+
+    col1,col2,col3 = st.columns(3)
+    modo = col1.radio("Modo", ["Novo Produto","Editar Produto"])
+
+    if modo == "Novo Produto":
+        nome = col2.text_input("Produto")
+        qtd = col3.number_input("Quantidade", 0, step=1)
+        if st.button("Cadastrar"):
+            if nome in df["Item"].values:
+                st.error("Produto já existe")
+            else:
+                st.session_state.estoque = pd.concat(
+                    [df, pd.DataFrame([{"Item":nome,"Qtd":qtd}])],
+                    ignore_index=True
+                )
+                st.success("Produto cadastrado")
+                st.rerun()
+    else:
+        if df.empty:
+            st.warning("Nenhum produto para editar")
+            return
+        prod = col2.selectbox("Produto", df["Item"])
+        idx = df[df["Item"] == prod].index[0]
+        nova = col3.number_input("Nova quantidade", 0, step=1, value=int(df.at[idx,"Qtd"]))
+        if st.button("Atualizar"):
+            df.at[idx,"Qtd"] = nova
+            st.success("Atualizado")
+            st.rerun()
+
+    st.divider()
+    st.subheader("🔄 Movimentação")
+
+    if df.empty:
+        return
+
+    c4,c5,c6 = st.columns(3)
+    prod = c4.selectbox("Produto", df["Item"])
+    qtd = c5.number_input("Quantidade", 1, step=1)
+    acao = c6.radio("Ação", ["Entrada","Saída"])
 
     if st.button("Confirmar"):
-        idx = df[df["Item"] == item].index[0]
-        if acao == "Saída" and df.at[idx, "Qtd"] < qtd:
+        idx = df[df["Item"] == prod].index[0]
+        if acao == "Saída" and df.at[idx,"Qtd"] < qtd:
             st.error("Estoque insuficiente")
-            return
-        df.at[idx, "Qtd"] += qtd if acao == "Entrada" else -qtd
-        st.rerun()
+        else:
+            df.at[idx,"Qtd"] += qtd if acao == "Entrada" else -qtd
+            st.success("Movimentação realizada")
+            st.rerun()
 
-# ======================================================
+# =========================
 # FORNECEDORES
-# ======================================================
-def render_fornecedores():
+# =========================
+def fornecedores():
     st.title("🚚 Fornecedores")
     st.dataframe(st.session_state.fornecedores, use_container_width=True)
 
-    with st.form("fornecedor"):
-        empresa = st.text_input("Empresa")
-        contato = st.text_input("Contato")
-        telefone = st.text_input("Telefone")
-        produto = st.text_input("Produto")
-
+    with st.form("forn"):
+        emp = st.text_input("Empresa")
+        cont = st.text_input("Contato")
+        tel = st.text_input("Telefone")
+        prod = st.text_input("Produto")
         if st.form_submit_button("Cadastrar"):
             st.session_state.fornecedores = pd.concat(
-                [st.session_state.fornecedores, pd.DataFrame([{
-                    "Empresa": empresa,
-                    "Contato": contato,
-                    "Telefone": telefone,
-                    "Produto": produto
-                }])],
+                [st.session_state.fornecedores,
+                 pd.DataFrame([{
+                     "Empresa":emp,"Contato":cont,
+                     "Telefone":tel,"Produto":prod
+                 }])],
                 ignore_index=True
             )
-            st.success("Fornecedor cadastrado!")
+            st.success("Fornecedor cadastrado")
+            st.rerun()
 
-# ======================================================
-# APP
-# ======================================================
-if not st.session_state.authenticated:
-    login_screen()
-else:
-    menu = sidebar_menu()
-
-    if menu == "Dashboard":
-        render_dashboard()
-    elif menu == "Agendamentos":
-        render_agendamentos()
-    elif menu == "Pátio":
-        render_patio()
-    elif menu == "Financeiro":
-        render_financeiro()
-    elif menu == "Relatórios":
-        render_relatorios()
-    elif menu == "Estoque":
-        render_estoque()
-    elif menu == "Fornecedores":
-        render_fornecedores()
+# =========================
+# ROTEAMENTO
+# =========================
+{
+    "Dashboard": dashboard,
+    "Agendamentos": agendamentos,
+    "Pátio": patio,
+    "Financeiro": financeiro,
+    "Relatórios": relatorios,
+    "Estoque": estoque,
+    "Fornecedores": fornecedores
+}[menu]()
