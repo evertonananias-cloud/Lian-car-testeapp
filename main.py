@@ -8,7 +8,7 @@ from datetime import date
 # ======================================================
 st.set_page_config(
     page_title="Lian Car | Gestão Automotiva",
-    page_icon="🧼",
+    page_icon="🧼🚿🚙",
     layout="wide"
 )
 
