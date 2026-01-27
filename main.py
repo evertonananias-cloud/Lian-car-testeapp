@@ -94,6 +94,39 @@ def agendamentos():
     df_s = pd.read_sql("SELECT * FROM servicos", conn)
     if df_s.empty: st.warning("Por favor, cadastre serviços antes de agendar."); return
     with st.form("add_ag"):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        cli = st.text_input("Cliente")
+        pla = st.text_input("Placa")
+
+    with col2:
+        fabricante = st.text_input("Fabricante")
+        modelo_veiculo = st.text_input("Modelo do veículo")
+
+    serv = st.selectbox("Serviço", df_s["Nome"])
+    v_sug = df_s[df_s["Nome"] == serv]["Valor"].values[0]
+    val = st.number_input("Valor Cobrado (R$)", value=float(v_sug))
+    dt = st.date_input("Data", date.today())
+
+    if st.form_submit_button("Confirmar Agendamento"):
+        conn.execute("""
+            INSERT INTO agendamentos
+            (Data, Cliente, Placa, Fabricante, Modelo, Servico, Valor, Status)
+            VALUES (?,?,?,?,?,?,?,?)
+        """, (
+            dt.isoformat(),
+            cli,
+            pla,
+            fabricante,
+            modelo_veiculo,
+            serv,
+            val,
+            "Agendado"
+        ))
+        conn.commit()
+        st.success("Agendado com sucesso!")
+        st.rerun()
 col1, col2 = st.columns(2)
     with col1:
         cli = st.text_input("Cliente")
