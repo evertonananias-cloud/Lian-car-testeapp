@@ -6,7 +6,7 @@ from datetime import date
 # ======================================================
 # CONFIGURAÇÃO E BANCO DE DADOS
 # ======================================================
-st.set_page_config(page_title="Lian Car | Gestão 360", page_icon="🧼", layout="wide")
+st.set_page_config(page_title="Lian Car | Gestão 360", page_icon="🧼🚘🚿✨️", layout="wide")
 
 DB_NAME = "lian_car.db"
 
@@ -71,7 +71,7 @@ def dashboard():
     conn.close()
     
     c1, c2, c3 = st.columns(3)
-    c1.metric("Faturamento (Concluído)", f"R$ {entradas:,.2f}")
+    c1.metric("Faturamento (Total)", f"R$ {entradas:,.2f}")
     c2.metric("Despesas Totais", f"R$ {saidas:,.2f}")
     c3.metric("Lucro Líquido", f"R$ {entradas - saidas:,.2f}")
 
