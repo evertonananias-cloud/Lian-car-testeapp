@@ -94,7 +94,7 @@ def agendamentos():
     df_s = pd.read_sql("SELECT * FROM servicos", conn)
     if df_s.empty: st.warning("Por favor, cadastre serviços antes de agendar."); return
     with st.form("add_ag"):
-    col1, col2 = st.columns(2)
+col1, col2 = st.columns(2)
     with col1:
         cli = st.text_input("Cliente")
         pla = st.text_input("Placa")
