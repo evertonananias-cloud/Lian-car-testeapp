@@ -52,7 +52,7 @@ if not st.session_state.logado:
     with col_l:
         u = st.text_input("Usuário")
         p = st.text_input("Senha", type="password")
-        if st.button("Aceder"):
+        if st.button("Entrar"):
             if u == "admin" and p == "admin123":
                 st.session_state.logado = True
                 st.rerun()
