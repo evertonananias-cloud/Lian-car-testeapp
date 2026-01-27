@@ -1,41 +1,33 @@
-# 🧼 Lian Car – Gestão Automotiva
+# 🧼 Lian Car - Sistema de Gestão Automotiva
 
-Sistema de gestão para estética automotiva desenvolvido em **Streamlit**, com foco em simplicidade, performance e controle financeiro.
-
----
+O **Lian Car** é um sistema de gestão integrado desenvolvido em Python com Streamlit, focado em pequenos lava-jatos e centros automotivos. O sistema permite o controle total do fluxo de caixa, agendamentos e visão estratégica do negócio.
 
 ## 🚀 Funcionalidades
 
-### 📊 Dashboard
-- Faturamento total
-- Despesas
-- Lucro automático
+- **Dashboard Financeiro:** Visualização em tempo real de Faturamento, Despesas e Lucro Líquido.
+- **Gestão de Caixa:** Lançamentos detalhados de Entradas (Serviços/Vendas) e Saídas (Custos/Pagamentos).
+- **Controle de Pátio:** Gestão de status dos veículos (Agendado, Lavando, Concluído).
+- **Banco de Dados Persistente:** Utiliza SQLite para armazenamento seguro dos dados.
+- **Backup:** Exportação de relatórios financeiros em formato CSV.
 
-### 🛠️ Serviços
-- Cadastro dinâmico de serviços
-- Definição de valores
-- Serviços reutilizáveis no agendamento
+## 🛠️ Tecnologias Utilizadas
 
-### 📅 Agendamentos
-- Registro de clientes
-- Placa do veículo
-- Serviço + valor automático
-- Status do serviço (Agendado, Lavando, Concluído)
+* [Python](https://www.python.org/)
+* [Streamlit](https://streamlit.io/) - Interface do usuário
+* [Pandas](https://pandas.pydata.org/) - Manipulação de dados
+* [SQLite](https://www.sqlite.org/) - Banco de dados relacional
 
-### 🚗 Pátio Operacional
-- Visualização dos veículos em atendimento
-- Atualização de status em tempo real
+## 🔐 Acesso ao Sistema
 
-### 💰 Financeiro
-- Registro de despesas
-- Controle financeiro simples e direto
+As credenciais padrão para o primeiro acesso administrativo são:
 
-### 📄 Relatórios
-- Visualização completa dos dados
-- Exportação em CSV (backup)
+- **Usuário:** `admin`
+- **Senha:** `admin123`
 
----
+## 📦 Como Instalar e Rodar
 
-## 🧑‍💻 Acesso ao Sistema
+Se desejar rodar o projeto localmente:
 
-**Usuário padrão (demo):**
+1. **Clone o repositório:**
+   ```bash
+   git clone [https://github.com/seu-usuario/lian-car-app.git](https://github.com/seu-usuario/lian-car-app.git)
