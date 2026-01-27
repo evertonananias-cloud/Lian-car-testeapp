@@ -64,7 +64,7 @@ if not st.session_state.logado:
 # ======================================================
 
 def dashboard():
-    st.title("📊 Painel de Controlo")
+    st.title("📊 Painel de Controle")
     conn = get_connection()
     entradas = pd.read_sql("SELECT SUM(Valor) FROM agendamentos WHERE Status='Concluído'", conn).iloc[0,0] or 0
     saidas = pd.read_sql("SELECT SUM(Valor) FROM despesas", conn).iloc[0,0] or 0
