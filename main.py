@@ -1,91 +1,40 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
 from datetime import date
+from streamlit_gsheets import GSheetsConnection
 
 # ======================================================
-# CONFIGURAÇÃO GERAL
+# CONFIGURAÇÃO E CONEXÃO NUVEM
 # ======================================================
-st.set_page_config(
-    page_title="Lian Car | Gestão 360",
-    page_icon="🧼🚘🚿✨️",
-    layout="wide"
-)
+st.set_page_config(page_title="Lian Car | Gestão Nuvem", page_icon="🧼", layout="wide")
 
-DB_NAME = "lian_car.db"
+# Conexão oficial com o Google Sheets
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# ======================================================
-# BANCO DE DADOS
-# ======================================================
-def get_connection():
-    return sqlite3.connect(DB_NAME, check_same_thread=False)
-
-def init_db():
-    conn = get_connection()
-    c = conn.cursor()
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS servicos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Nome TEXT UNIQUE,
-            Valor REAL
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS agendamentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Data TEXT,
-            Cliente TEXT,
-            Placa TEXT,
-            Fabricante TEXT,
-            Modelo TEXT,
-            Servico TEXT,
-            Valor REAL,
-            Status TEXT
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS despesas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Data TEXT,
-            Descricao TEXT,
-            Valor REAL
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS estoque (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Item TEXT,
-            Qtd INTEGER
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS fornecedores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Nome TEXT,
-            Contato TEXT,
-            Produto TEXT
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-init_db()
+def carregar_dados(aba):
+    try:
+        # Tenta ler a aba específica. ttl=0 evita que o Streamlit use cache antigo
+        return conn.read(worksheet=aba, ttl=0)
+    except Exception:
+        # Se a aba estiver vazia ou não existir, cria estrutura padrão
+        estruturas = {
+            "agendamentos": ["Data", "Cliente", "Placa", "Servico", "Valor", "Status"],
+            "despesas": ["Data", "Descricao", "Valor"],
+            "estoque": ["Item", "Qtd"],
+            "fornecedores": ["Nome", "Contato", "Produto"],
+            "servicos": ["Nome", "Valor"]
+        }
+        return pd.DataFrame(columns=estruturas.get(aba, []))
 
 # ======================================================
-# CSS
+# ESTILO CSS
 # ======================================================
 st.markdown("""
 <style>
-.stApp { background: radial-gradient(circle at top, #020617, #000); color: #e5e7eb; }
-[data-testid="stMetric"] { background: #0f172a; border-radius: 14px; padding: 18px; }
-.stButton>button { background: linear-gradient(135deg, #0ea5e9, #38bdf8); border-radius: 10px; font-weight: bold; width: 100%; }
-.card-veiculo { background:#1e293b; padding:1.2rem; border-radius:12px; border-left:6px solid #0ea5e9; }
+    .stApp { background: #020617; color: #e5e7eb; }
+    [data-testid="stMetric"] { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; }
+    .card-patio { background: #1e293b; padding: 20px; border-radius: 15px; border-left: 6px solid #0ea5e9; margin-bottom: 10px; }
+    .stButton>button { background: linear-gradient(135deg, #0ea5e9, #38bdf8); color: white; font-weight: bold; border-radius: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -97,235 +46,144 @@ if "logado" not in st.session_state:
 
 if not st.session_state.logado:
     st.title("🔐 Acesso Lian Car")
-    usuario = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
-
+    u, p = st.text_input("Usuário"), st.text_input("Senha", type="password")
     if st.button("Entrar"):
-        if usuario == "admin" and senha == "admin123":
+        if u == "admin" and p == "admin123":
             st.session_state.logado = True
             st.rerun()
-        else:
-            st.error("Credenciais inválidas")
+        else: st.error("Usuário ou senha inválidos")
     st.stop()
 
 # ======================================================
-# DASHBOARD
+# MÓDULOS DE PÁGINAS
 # ======================================================
+
 def dashboard():
     st.title("📊 Painel de Controle")
-    conn = get_connection()
-
-    entradas = pd.read_sql(
-        "SELECT SUM(Valor) FROM agendamentos WHERE Status='Concluído'", conn
-    ).iloc[0, 0] or 0
-
-    saidas = pd.read_sql(
-        "SELECT SUM(Valor) FROM despesas", conn
-    ).iloc[0, 0] or 0
-
-    conn.close()
-
+    df_ag = carregar_dados("agendamentos")
+    df_dp = carregar_dados("despesas")
+    
+    receita = pd.to_numeric(df_ag[df_ag["Status"] == "Concluído"]["Valor"]).sum() if not df_ag.empty else 0
+    gastos = pd.to_numeric(df_dp["Valor"]).sum() if not df_dp.empty else 0
+    
     c1, c2, c3 = st.columns(3)
-    c1.metric("💰 Faturamento", f"R$ {entradas:,.2f}")
-    c2.metric("📉 Despesas", f"R$ {saidas:,.2f}")
-    c3.metric("📈 Lucro", f"R$ {entradas - saidas:,.2f}")
+    c1.metric("Receita (Concluído)", f"R$ {receita:,.2f}")
+    c2.metric("Despesas Totais", f"R$ {gastos:,.2f}")
+    c3.metric("Lucro Líquido", f"R$ {receita - gastos:,.2f}")
 
-# ======================================================
-# SERVIÇOS
-# ======================================================
-def servicos():
-    st.title("🛠 Serviços")
-    conn = get_connection()
-
-    with st.form("cad_serv"):
-        nome = st.text_input("Nome do Serviço")
-        valor = st.number_input("Valor (R$)", min_value=0.0)
-        if st.form_submit_button("Salvar"):
-            try:
-                conn.execute(
-                    "INSERT INTO servicos (Nome, Valor) VALUES (?,?)",
-                    (nome, valor)
-                )
-                conn.commit()
-                st.success("Serviço cadastrado!")
-                st.rerun()
-            except:
-                st.warning("Serviço já existe.")
-
-    st.dataframe(pd.read_sql("SELECT * FROM servicos", conn), use_container_width=True)
-    conn.close()
-
-# ======================================================
-# AGENDAMENTOS (CORRIGIDO)
-# ======================================================
 def agendamentos():
-    st.title("📅 Novo Agendamento")
-    conn = get_connection()
-    df_s = pd.read_sql("SELECT * FROM servicos", conn)
-
-    if df_s.empty:
-        st.warning("Cadastre serviços antes de agendar.")
-        conn.close()
-        return
-
-    with st.form("add_ag"):
-        col1, col2 = st.columns(2)
-
-        with col1:
-            cli = st.text_input("Cliente")
-            pla = st.text_input("Placa")
-
-        with col2:
-            fabricante = st.text_input("Fabricante")
-            modelo = st.text_input("Modelo do Veículo")
-
-        serv = st.selectbox("Serviço", df_s["Nome"])
-        valor_padrao = float(df_s[df_s["Nome"] == serv]["Valor"].values[0])
-        val = st.number_input("Valor Cobrado (R$)", value=valor_padrao)
-        dt = st.date_input("Data", date.today())
-
+    st.title("📅 Agendamentos")
+    df_s = carregar_dados("servicos")
+    
+    with st.form("form_ag"):
+        c1, c2 = st.columns(2)
+        cli = c1.text_input("Cliente")
+        pla = c2.text_input("Placa")
+        serv = st.selectbox("Serviço", df_s["Nome"] if not df_s.empty else ["Cadastre serviços primeiro"])
+        val = st.number_input("Valor Final (R$)", min_value=0.0)
         if st.form_submit_button("Confirmar Agendamento"):
-            conn.execute("""
-                INSERT INTO agendamentos
-                (Data, Cliente, Placa, Fabricante, Modelo, Servico, Valor, Status)
-                VALUES (?,?,?,?,?,?,?,?)
-            """, (
-                dt.isoformat(),
-                cli,
-                pla,
-                fabricante,
-                modelo,
-                serv,
-                val,
-                "Agendado"
-            ))
-            conn.commit()
-            st.success("Agendamento realizado!")
+            novo = pd.DataFrame([[date.today().isoformat(), cli, pla, serv, val, "Agendado"]], columns=["Data", "Cliente", "Placa", "Servico", "Valor", "Status"])
+            df_atual = carregar_dados("agendamentos")
+            df_final = pd.concat([df_atual, novo], ignore_index=True)
+            conn.update(worksheet="agendamentos", data=df_final)
+            st.success("Salvo no Google Sheets!")
             st.rerun()
 
-    conn.close()
-
-# ======================================================
-# PÁTIO
-# ======================================================
 def patio():
-    st.title("🚗 Pátio")
-    conn = get_connection()
-    df = pd.read_sql(
-        "SELECT * FROM agendamentos WHERE Status!='Concluído' ORDER BY id DESC",
-        conn
-    )
-
+    st.title("🚗 Pátio Operacional")
+    df = carregar_dados("agendamentos")
+    
     if df.empty:
-        st.info("Nenhum veículo no pátio.")
+        st.info("Pátio Vazio")
     else:
-        for _, row in df.iterrows():
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.markdown(
-                    f"<div class='card-veiculo'><b>{row['Placa']}</b><br>"
-                    f"{row['Cliente']} — {row['Servico']}</div>",
-                    unsafe_allow_html=True
-                )
-            with col2:
-                novo = st.selectbox(
-                    "Status",
-                    ["Agendado", "Lavando", "Concluído"],
-                    index=["Agendado", "Lavando", "Concluído"].index(row["Status"]),
-                    key=row["id"]
-                )
-                if novo != row["Status"]:
-                    conn.execute(
-                        "UPDATE agendamentos SET Status=? WHERE id=?",
-                        (novo, row["id"])
-                    )
-                    conn.commit()
+        # Filtra apenas os que não estão concluídos
+        pendentes = df[df["Status"] != "Concluído"]
+        for i, row in pendentes.iterrows():
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+                col1.markdown(f"<div class='card-patio'><b>{row['Placa']}</b><br>{row['Cliente']} - {row['Servico']}</div>", unsafe_allow_html=True)
+                
+                # Chave única por linha (i) para evitar bugs
+                novo_st = col2.selectbox("Status", ["Agendado", "Lavando", "Concluído"], 
+                                         index=["Agendado", "Lavando", "Concluído"].index(row["Status"]), 
+                                         key=f"st_{i}")
+                
+                if novo_st != row["Status"]:
+                    df.at[i, "Status"] = novo_st
+                    conn.update(worksheet="agendamentos", data=df)
                     st.rerun()
 
-    conn.close()
-
-# ======================================================
-# FINANCEIRO
-# ======================================================
 def financeiro():
-    st.title("💰 Financeiro")
-    conn = get_connection()
-
-    entradas = pd.read_sql(
-        "SELECT SUM(Valor) FROM agendamentos WHERE Status='Concluído'", conn
-    ).iloc[0, 0] or 0
-
-    saidas = pd.read_sql(
-        "SELECT SUM(Valor) FROM despesas", conn
-    ).iloc[0, 0] or 0
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Entradas", f"R$ {entradas:,.2f}")
-    c2.metric("Saídas", f"R$ {saidas:,.2f}")
-    c3.metric("Saldo", f"R$ {entradas - saidas:,.2f}")
-
-    with st.form("nova_saida"):
-        desc = st.text_input("Descrição")
-        val = st.number_input("Valor", min_value=0.0)
-        if st.form_submit_button("Registrar Saída"):
-            conn.execute(
-                "INSERT INTO despesas (Data, Descricao, Valor) VALUES (?,?,?)",
-                (date.today().isoformat(), desc, val)
-            )
-            conn.commit()
+    st.title("💰 Fluxo de Caixa (Entradas e Saídas)")
+    df_ag = carregar_dados("agendamentos")
+    df_dp = carregar_dados("despesas")
+    
+    # Entradas Automáticas
+    entradas = df_ag[df_ag["Status"] == "Concluído"][["Data", "Cliente", "Valor"]].copy()
+    entradas["Tipo"] = "Entrada"
+    
+    # Saídas Manuais
+    saidas = df_dp.copy()
+    saidas["Tipo"] = "Saída"
+    
+    fluxo = pd.concat([entradas, saidas]).sort_values("Data", ascending=False)
+    
+    st.write("### Lançar Saída")
+    with st.form("saida"):
+        desc, v_s = st.text_input("Descrição"), st.number_input("Valor", min_value=0.0)
+        if st.form_submit_button("Salvar Saída"):
+            nova_s = pd.DataFrame([[date.today().isoformat(), desc, v_s]], columns=["Data", "Descricao", "Valor"])
+            df_final = pd.concat([df_dp, nova_s], ignore_index=True)
+            conn.update(worksheet="despesas", data=df_final)
             st.rerun()
+            
+    st.subheader("Extrato Detalhado")
+    st.dataframe(fluxo, use_container_width=True)
 
-    conn.close()
-
-# ======================================================
-# ESTOQUE / FORNECEDORES
-# ======================================================
 def estoque():
     st.title("📦 Estoque")
-    conn = get_connection()
-    with st.form("estoque"):
-        it = st.text_input("Produto")
-        qt = st.number_input("Quantidade", min_value=0)
-        if st.form_submit_button("Salvar"):
-            conn.execute("INSERT INTO estoque (Item, Qtd) VALUES (?,?)", (it, qt))
-            conn.commit()
+    df = carregar_dados("estoque")
+    with st.form("est"):
+        it, qt = st.text_input("Item"), st.number_input("Qtd", min_value=0)
+        if st.form_submit_button("Atualizar"):
+            novo = pd.DataFrame([[it, qt]], columns=["Item", "Qtd"])
+            df_final = pd.concat([df, novo], ignore_index=True)
+            conn.update(worksheet="estoque", data=df_final)
             st.rerun()
-    st.dataframe(pd.read_sql("SELECT * FROM estoque", conn))
-    conn.close()
+    st.dataframe(df, use_container_width=True)
 
 def fornecedores():
     st.title("🏭 Fornecedores")
-    conn = get_connection()
+    df = carregar_dados("fornecedores")
     with st.form("forn"):
-        n = st.text_input("Nome")
-        c = st.text_input("Contato")
-        p = st.text_input("Produto")
-        if st.form_submit_button("Cadastrar"):
-            conn.execute(
-                "INSERT INTO fornecedores (Nome, Contato, Produto) VALUES (?,?,?)",
-                (n, c, p)
-            )
-            conn.commit()
+        n, c, p = st.text_input("Nome"), st.text_input("Contato"), st.text_input("Produto")
+        if st.form_submit_button("Salvar"):
+            novo = pd.DataFrame([[n, c, p]], columns=["Nome", "Contato", "Produto"])
+            df_final = pd.concat([df, novo], ignore_index=True)
+            conn.update(worksheet="fornecedores", data=df_final)
             st.rerun()
-    st.dataframe(pd.read_sql("SELECT * FROM fornecedores", conn))
-    conn.close()
+    st.dataframe(df, use_container_width=True)
+
+def servicos():
+    st.title("🛠️ Configurar Serviços")
+    df = carregar_dados("servicos")
+    with st.form("serv"):
+        n, v = st.text_input("Nome"), st.number_input("Valor", min_value=0.0)
+        if st.form_submit_button("Cadastrar"):
+            novo = pd.DataFrame([[n, v]], columns=["Nome", "Valor"])
+            df_final = pd.concat([df, novo], ignore_index=True)
+            conn.update(worksheet="servicos", data=df_final)
+            st.rerun()
+    st.dataframe(df, use_container_width=True)
 
 # ======================================================
-# MENU
+# MENU E NAVEGAÇÃO
 # ======================================================
-menu = st.sidebar.radio(
-    "Menu",
-    ["Dashboard", "Serviços", "Agendamentos", "Pátio", "Financeiro", "Estoque", "Fornecedores"]
-)
+st.sidebar.title("Lian Car")
+menu = st.sidebar.radio("Navegação", ["Dashboard", "Serviços", "Agendamentos", "Pátio", "Financeiro", "Estoque", "Fornecedores"])
 
-pages = {
-    "Dashboard": dashboard,
-    "Serviços": servicos,
-    "Agendamentos": agendamentos,
-    "Pátio": patio,
-    "Financeiro": financeiro,
-    "Estoque": estoque,
-    "Fornecedores": fornecedores
+paginas = {
+    "Dashboard": dashboard, "Serviços": servicos, "Agendamentos": agendamentos,
+    "Pátio": patio, "Financeiro": financeiro, "Estoque": estoque, "Fornecedores": fornecedores
 }
-
-pages[menu]()
+paginas[menu]()
