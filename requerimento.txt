@@ -1,4 +1,1 @@
-streamlit
-pandas
-st-supabase-connection
-pip install st-supabase-connection
+
