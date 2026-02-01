@@ -1,15 +1,21 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from st_supabase_connection import SupabaseConnection, execute_query
+from supabase import create_client, Client
 
 # ======================================================
 # CONFIGURAÇÃO
 # ======================================================
 st.set_page_config(page_title="Lian Car | Gestão Nuvem", page_icon="🧼", layout="wide")
 
-# Conexão com Supabase via st.connection (usa secrets.toml)
-supabase = st.connection("supabase", type=SupabaseConnection)
+# Conexão com Supabase
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets["connections"]["supabase"]["url"]
+    key = st.secrets["connections"]["supabase"]["key"]
+    return create_client(url, key)
+
+supabase = init_supabase()
 
 
 # ======================================================
@@ -19,14 +25,11 @@ supabase = st.connection("supabase", type=SupabaseConnection)
 def carregar_dados(tabela: str) -> pd.DataFrame:
     """Lê todos os dados de uma tabela e retorna como DataFrame."""
     try:
-        result = execute_query(
-            supabase.table(tabela).select("*").order("id"),
-            ttl=0  # sem cache — sempre busca dados frescos
-        )
-        df = pd.DataFrame(result.data)
+        response = supabase.table(tabela).select("*").order("id").execute()
+        df = pd.DataFrame(response.data)
         # Remove coluna 'id' da visualização (gerenciada pelo banco)
-        if "id" in df.columns:
-            df.drop(columns=["id"], inplace=True)
+        if not df.empty and "id" in df.columns:
+            df = df.drop(columns=["id"])
         return df
     except Exception as e:
         st.warning(f"⚠️ Não foi possível carregar '{tabela}': {e}")
@@ -36,10 +39,7 @@ def carregar_dados(tabela: str) -> pd.DataFrame:
 def inserir_dado(tabela: str, dados: dict) -> bool:
     """Insere uma linha na tabela especificada com tratamento de erro."""
     try:
-        execute_query(
-            supabase.table(tabela).insert(dados),
-            ttl=None  # writes não são cacheados
-        )
+        supabase.table(tabela).insert(dados).execute()
         st.success(f"✅ Registro salvo em '{tabela}' com sucesso!")
         return True
     except Exception as e:
@@ -54,7 +54,7 @@ def atualizar_dado(tabela: str, filtro: dict, dados: dict) -> bool:
         # Aplica filtros dinamicamente (ex: {"id": 5} → .eq("id", 5))
         for coluna, valor in filtro.items():
             query = query.eq(coluna, valor)
-        execute_query(query, ttl=None)
+        query.execute()
         st.success(f"✅ Registro atualizado em '{tabela}'!")
         return True
     except Exception as e:
@@ -125,7 +125,7 @@ def agendamentos():
         c1, c2 = st.columns(2)
         cli  = c1.text_input("Cliente")
         pla  = c2.text_input("Placa")
-        serv = st.selectbox("Serviço", df_s["nome"] if not df_s.empty else ["Cadastre serviços primeiro"])
+        serv = st.selectbox("Serviço", df_s["nome"].tolist() if not df_s.empty else ["Cadastre serviços primeiro"])
         val  = st.number_input("Valor Final (R$)", min_value=0.0)
 
         if st.form_submit_button("Confirmar Agendamento"):
@@ -155,11 +155,8 @@ def patio():
 
     # Busca com id para poder atualizar depois
     try:
-        result = execute_query(
-            supabase.table("agendamentos").select("*").neq("status", "Concluído").order("id"),
-            ttl=0
-        )
-        pendentes = result.data
+        response = supabase.table("agendamentos").select("*").neq("status", "Concluído").order("id").execute()
+        pendentes = response.data
     except Exception as e:
         st.error(f"❌ Erro ao carregar pátio: {e}")
         pendentes = []
@@ -208,7 +205,7 @@ def financeiro():
     else:
         saidas = pd.DataFrame(columns=["data", "Descrição", "valor", "Tipo"])
 
-    fluxo = pd.concat([entradas, saidas]).sort_values("data", ascending=False)
+    fluxo = pd.concat([entradas, saidas], ignore_index=True).sort_values("data", ascending=False)
 
     st.write("### Lançar Saída")
     with st.form("saida"):
